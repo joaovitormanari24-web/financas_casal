@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/finance_providers.dart';
@@ -33,6 +34,7 @@ class _AddRecurringTransactionScreenState
   final _formKey = GlobalKey<FormState>();
   final _descriptionController = TextEditingController();
   final _amountController = TextEditingController();
+  final _newAmountController = TextEditingController();
 
   String? _categoryId;
   String? _paidByMemberId;
@@ -42,10 +44,17 @@ class _AddRecurringTransactionScreenState
   bool _isSubmitting = false;
   String? _errorMessage;
 
+  bool _hasEndDate = false;
+  DateTime? _endDate;
+
+  bool _hasAmountChange = false;
+  DateTime? _amountChangeDate;
+
   @override
   void dispose() {
     _descriptionController.dispose();
     _amountController.dispose();
+    _newAmountController.dispose();
     super.dispose();
   }
 
@@ -59,6 +68,22 @@ class _AddRecurringTransactionScreenState
     if (_categoryId == null) {
       setState(() => _errorMessage = 'Escolha uma categoria');
       return;
+    }
+    if (_hasEndDate && _endDate == null) {
+      setState(() => _errorMessage = 'Escolha a data de término');
+      return;
+    }
+    double? newAmount;
+    if (_hasAmountChange) {
+      if (_amountChangeDate == null) {
+        setState(() => _errorMessage = 'Escolha a partir de quando o valor muda');
+        return;
+      }
+      newAmount = _parseAmount(_newAmountController.text);
+      if (newAmount == null || newAmount <= 0) {
+        setState(() => _errorMessage = 'Informe o novo valor');
+        return;
+      }
     }
 
     final household = ref.read(currentHouseholdProvider).valueOrNull;
@@ -81,8 +106,17 @@ class _AddRecurringTransactionScreenState
         active: true,
         paymentMethod: _paymentMethod,
         paidByMemberId: _paidByMemberId,
+        endDate: _hasEndDate ? _endDate : null,
       );
-      await ref.read(recurringTransactionRepositoryProvider).create(recurring);
+      final repository = ref.read(recurringTransactionRepositoryProvider);
+      final created = await repository.create(recurring);
+      if (_hasAmountChange) {
+        await repository.addAmountChange(
+          recurringTransactionId: created.id,
+          effectiveDate: _amountChangeDate!,
+          newAmount: newAmount!,
+        );
+      }
       ref.invalidate(recurringTransactionsProvider);
       Haptics.success();
       if (mounted) Navigator.of(context).pop();
@@ -92,6 +126,26 @@ class _AddRecurringTransactionScreenState
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
+  }
+
+  Future<void> _pickEndDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _endDate ?? DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) setState(() => _endDate = picked);
+  }
+
+  Future<void> _pickAmountChangeDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _amountChangeDate ?? DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) setState(() => _amountChangeDate = picked);
   }
 
   @override
@@ -253,6 +307,67 @@ class _AddRecurringTransactionScreenState
                   },
                   orElse: () => const SizedBox.shrink(),
                 ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Tem data pra acabar?', style: AppTypography.captionEmphasis),
+                  subtitle: Text(
+                    _hasEndDate && _endDate != null
+                        ? 'Até ${DateFormat('dd/MM/yyyy', 'pt_BR').format(_endDate!)}'
+                        : 'Por tempo indeterminado',
+                    style: AppTypography.caption,
+                  ),
+                  value: _hasEndDate,
+                  onChanged: (value) {
+                    setState(() => _hasEndDate = value);
+                    if (value) _pickEndDate();
+                  },
+                ),
+                if (_hasEndDate)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: _pickEndDate,
+                      child: Text(
+                        _endDate == null
+                            ? 'Escolher data'
+                            : 'Alterar data (${DateFormat('dd/MM/yyyy', 'pt_BR').format(_endDate!)})',
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: AppSpacing.sm),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('O valor vai reajustar?', style: AppTypography.captionEmphasis),
+                  subtitle: Text(
+                    'Ex.: aluguel que aumenta a partir de um mês específico',
+                    style: AppTypography.caption,
+                  ),
+                  value: _hasAmountChange,
+                  onChanged: (value) => setState(() => _hasAmountChange = value),
+                ),
+                if (_hasAmountChange) ...[
+                  TextFormField(
+                    controller: _newAmountController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      hintText: 'Novo valor',
+                      prefixText: 'R\$ ',
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: _pickAmountChangeDate,
+                      child: Text(
+                        _amountChangeDate == null
+                            ? 'A partir de quando?'
+                            : 'A partir de ${DateFormat('dd/MM/yyyy', 'pt_BR').format(_amountChangeDate!)}',
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.sm),
                 if (_errorMessage != null) ...[
                   Text(
                     _errorMessage!,

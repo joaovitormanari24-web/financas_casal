@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/providers/finance_providers.dart';
 import '../../../core/theme/app_colors.dart';
@@ -161,7 +162,8 @@ class _RecurringCard extends ConsumerWidget {
                 children: [
                   Text(item.description, style: AppTypography.body),
                   Text(
-                    '${item.frequency.label} · ${CurrencyFormatter.format(item.amount)}',
+                    '${item.frequency.label} · ${CurrencyFormatter.format(item.amount)}'
+                    '${item.endDate != null ? ' · até ${DateFormat('dd/MM/yyyy', 'pt_BR').format(item.endDate!)}' : ''}',
                     style: AppTypography.caption.copyWith(color: palette.textTertiary),
                   ),
                 ],

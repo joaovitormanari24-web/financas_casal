@@ -151,6 +151,7 @@ class RecurringTransaction extends Equatable {
     required this.active,
     required this.paymentMethod,
     this.paidByMemberId,
+    this.endDate,
   });
 
   final String id;
@@ -170,6 +171,10 @@ class RecurringTransaction extends Equatable {
   /// membro mais antigo do household (ver função no banco).
   final String? paidByMemberId;
 
+  /// Último dia em que a recorrência ainda gera lançamento. Nulo = por
+  /// tempo indeterminado.
+  final DateTime? endDate;
+
   factory RecurringTransaction.fromJson(Map<String, dynamic> json) =>
       RecurringTransaction(
         id: json['id'] as String,
@@ -182,6 +187,7 @@ class RecurringTransaction extends Equatable {
         active: json['active'] as bool? ?? true,
         paymentMethod: PaymentMethodX.fromDb(json['payment_method'] as String),
         paidByMemberId: json['paid_by_member_id'] as String?,
+        endDate: json['end_date'] == null ? null : DateTime.parse(json['end_date'] as String),
       );
 
   Map<String, dynamic> toInsertJson() => {
@@ -194,6 +200,7 @@ class RecurringTransaction extends Equatable {
         'active': active,
         'payment_method': paymentMethod.dbValue,
         'paid_by_member_id': paidByMemberId,
+        'end_date': endDate?.toIso8601String(),
       };
 
   @override
