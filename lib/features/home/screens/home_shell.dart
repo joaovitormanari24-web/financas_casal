@@ -299,7 +299,16 @@ class _TransactionTile extends StatelessWidget {
     final isExpense = transaction.type == TransactionType.expense;
     final color = categoryColor != null ? colorFromHex(categoryColor!) : palette.accent;
 
-    return Padding(
+    return InkWell(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      onTap: () => unawaited(
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => AddTransactionScreen(existing: transaction),
+          ),
+        ),
+      ),
+      child: Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       child: Row(
         children: [
@@ -336,6 +345,7 @@ class _TransactionTile extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }

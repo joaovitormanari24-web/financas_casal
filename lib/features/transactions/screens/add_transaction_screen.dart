@@ -12,7 +12,12 @@ import '../../../shared/utils/category_icons.dart';
 import '../../../shared/utils/haptics.dart';
 
 class AddTransactionScreen extends ConsumerStatefulWidget {
-  const AddTransactionScreen({super.key});
+  const AddTransactionScreen({this.existing, super.key});
+
+  /// Quando presente, a tela edita este lançamento em vez de criar um novo.
+  final models.Transaction? existing;
+
+  bool get isEditing => existing != null;
 
   @override
   ConsumerState<AddTransactionScreen> createState() => _AddTransactionScreenState();
@@ -20,16 +25,32 @@ class AddTransactionScreen extends ConsumerStatefulWidget {
 
 class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _amountController = TextEditingController();
-  final _descriptionController = TextEditingController();
+  late final TextEditingController _amountController;
+  late final TextEditingController _descriptionController;
 
-  TransactionType _type = TransactionType.expense;
-  PaymentMethod _paymentMethod = PaymentMethod.pix;
+  late TransactionType _type;
+  late PaymentMethod _paymentMethod;
   String? _categoryId;
   String? _paidByMemberId;
-  DateTime _date = DateTime.now();
+  late DateTime _date;
   bool _isSubmitting = false;
+  bool _isDeleting = false;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.existing;
+    _amountController = TextEditingController(
+      text: existing == null ? '' : existing.amount.toStringAsFixed(2).replaceAll('.', ','),
+    );
+    _descriptionController = TextEditingController(text: existing?.description ?? '');
+    _type = existing?.type ?? TransactionType.expense;
+    _paymentMethod = existing?.paymentMethod ?? PaymentMethod.pix;
+    _categoryId = existing?.categoryId;
+    _paidByMemberId = existing?.paidByMemberId;
+    _date = existing?.date ?? DateTime.now();
+  }
 
   @override
   void dispose() {
@@ -64,7 +85,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
 
     try {
       final transaction = models.Transaction(
-        id: '',
+        id: widget.existing?.id ?? '',
         householdId: household.id,
         type: _type,
         amount: _parseAmount(_amountController.text)!,
@@ -74,7 +95,12 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
         paidByMemberId: _paidByMemberId!,
         paymentMethod: _paymentMethod,
       );
-      await ref.read(transactionRepositoryProvider).create(transaction);
+      final repository = ref.read(transactionRepositoryProvider);
+      if (widget.isEditing) {
+        await repository.update(widget.existing!.id, transaction);
+      } else {
+        await repository.create(transaction);
+      }
       ref.invalidate(transactionsProvider);
       Haptics.success();
       if (mounted) Navigator.of(context).pop();
@@ -83,6 +109,43 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       setState(() => _errorMessage = 'Não foi possível salvar. Tente novamente.');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  Future<void> _delete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Excluir lançamento?'),
+        content: const Text('Essa ação não pode ser desfeita.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              'Excluir',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _isDeleting = true);
+    try {
+      await ref.read(transactionRepositoryProvider).delete(widget.existing!.id);
+      ref.invalidate(transactionsProvider);
+      Haptics.success();
+      if (mounted) Navigator.of(context).pop();
+    } catch (_) {
+      Haptics.warning();
+      setState(() => _errorMessage = 'Não foi possível excluir. Tente novamente.');
+    } finally {
+      if (mounted) setState(() => _isDeleting = false);
     }
   }
 
@@ -109,7 +172,22 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     });
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Novo lançamento')),
+      appBar: AppBar(
+        title: Text(widget.isEditing ? 'Editar lançamento' : 'Novo lançamento'),
+        actions: [
+          if (widget.isEditing)
+            IconButton(
+              icon: _isDeleting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.delete_outline_rounded),
+              onPressed: _isDeleting ? null : _delete,
+            ),
+        ],
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.screenPadding),
@@ -245,7 +323,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                           height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Salvar'),
+                      : Text(widget.isEditing ? 'Salvar alterações' : 'Salvar'),
                 ),
               ],
             ),

@@ -35,6 +35,16 @@ class TransactionRepository {
     return Transaction.fromJson(row);
   }
 
+  Future<Transaction> update(String id, Transaction transaction) async {
+    final row = await _client
+        .from('transactions')
+        .update(transaction.toInsertJson())
+        .eq('id', id)
+        .select()
+        .single();
+    return Transaction.fromJson(row);
+  }
+
   Future<void> delete(String id) async {
     await _client.from('transactions').delete().eq('id', id);
   }
