@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/finance_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../goals/screens/goals_screen.dart';
+import '../../recurring/screens/recurring_transactions_screen.dart';
 import 'home_shell.dart';
 
 /// Navegação por abas da área logada (Home / Metas). Mantém o estado de
@@ -21,6 +22,7 @@ class _RootShellState extends ConsumerState<RootShell> {
   static const _tabs = [
     HomeShell(),
     GoalsScreen(),
+    RecurringTransactionsScreen(),
   ];
 
   @override
@@ -48,6 +50,11 @@ class _RootShellState extends ConsumerState<RootShell> {
             icon: Icon(Icons.track_changes_outlined),
             selectedIcon: Icon(Icons.track_changes_rounded),
             label: 'Metas',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.autorenew_outlined),
+            selectedIcon: Icon(Icons.autorenew_rounded),
+            label: 'Recorrentes',
           ),
         ],
       ),

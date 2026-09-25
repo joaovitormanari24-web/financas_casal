@@ -149,6 +149,8 @@ class RecurringTransaction extends Equatable {
     required this.frequency,
     required this.dayOfCycle,
     required this.active,
+    required this.paymentMethod,
+    this.paidByMemberId,
   });
 
   final String id;
@@ -158,9 +160,15 @@ class RecurringTransaction extends Equatable {
   final String categoryId;
   final RecurrenceFrequency frequency;
 
-  /// Dia do mês (1-31) ou dia da semana (1-7), conforme [frequency].
+  /// Dia do mês (1-31) ou dia da semana ISO (1=segunda...7=domingo),
+  /// conforme [frequency].
   final int dayOfCycle;
   final bool active;
+  final PaymentMethod paymentMethod;
+
+  /// Membro responsável pelo lançamento gerado. Se nulo, o gerador usa o
+  /// membro mais antigo do household (ver função no banco).
+  final String? paidByMemberId;
 
   factory RecurringTransaction.fromJson(Map<String, dynamic> json) =>
       RecurringTransaction(
@@ -172,7 +180,21 @@ class RecurringTransaction extends Equatable {
         frequency: RecurrenceFrequencyX.fromDb(json['frequency'] as String),
         dayOfCycle: json['day_of_cycle'] as int,
         active: json['active'] as bool? ?? true,
+        paymentMethod: PaymentMethodX.fromDb(json['payment_method'] as String),
+        paidByMemberId: json['paid_by_member_id'] as String?,
       );
+
+  Map<String, dynamic> toInsertJson() => {
+        'household_id': householdId,
+        'description': description,
+        'amount': amount,
+        'category_id': categoryId,
+        'frequency': frequency.dbValue,
+        'day_of_cycle': dayOfCycle,
+        'active': active,
+        'payment_method': paymentMethod.dbValue,
+        'paid_by_member_id': paidByMemberId,
+      };
 
   @override
   List<Object?> get props => [id, householdId, description, amount, active];

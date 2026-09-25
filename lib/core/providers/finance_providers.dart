@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../data/repositories/category_repository.dart';
 import '../../data/repositories/goal_repository.dart';
+import '../../data/repositories/recurring_transaction_repository.dart';
 import '../../data/repositories/transaction_repository.dart';
 import '../../models/category.dart';
 import '../../models/goal.dart';
@@ -26,6 +27,16 @@ final goalsProvider = FutureProvider<List<Goal>>((ref) async {
   final household = await ref.watch(currentHouseholdProvider.future);
   if (household == null) return const [];
   return ref.watch(goalRepositoryProvider).fetchForHousehold(household.id);
+});
+
+final recurringTransactionRepositoryProvider = Provider<RecurringTransactionRepository>((ref) {
+  return RecurringTransactionRepository(ref.watch(supabaseClientProvider));
+});
+
+final recurringTransactionsProvider = FutureProvider<List<RecurringTransaction>>((ref) async {
+  final household = await ref.watch(currentHouseholdProvider.future);
+  if (household == null) return const [];
+  return ref.watch(recurringTransactionRepositoryProvider).fetchForHousehold(household.id);
 });
 
 /// Mês de referência exibido na Home — controla o dashboard e a lista de
