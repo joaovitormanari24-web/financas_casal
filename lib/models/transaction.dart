@@ -17,7 +17,7 @@ class Transaction extends Equatable {
     this.creditCardId,
     this.note,
     this.recurringTransactionId,
-    this.installmentId,
+    this.installmentPlanId,
     this.installmentNumber,
     this.installmentTotal,
   });
@@ -41,11 +41,11 @@ class Transaction extends Equatable {
   final String? recurringTransactionId;
 
   /// Preenchidos quando o lançamento é uma parcela (briefing, seção 33).
-  final String? installmentId;
+  final String? installmentPlanId;
   final int? installmentNumber;
   final int? installmentTotal;
 
-  bool get isInstallment => installmentId != null;
+  bool get isInstallment => installmentPlanId != null;
   bool get isRecurring => recurringTransactionId != null;
 
   factory Transaction.fromJson(Map<String, dynamic> json) => Transaction(
@@ -62,7 +62,7 @@ class Transaction extends Equatable {
         creditCardId: json['credit_card_id'] as String?,
         note: json['note'] as String?,
         recurringTransactionId: json['recurring_transaction_id'] as String?,
-        installmentId: json['installment_id'] as String?,
+        installmentPlanId: json['installment_plan_id'] as String?,
         installmentNumber: json['installment_number'] as int?,
         installmentTotal: json['installment_total'] as int?,
       );
@@ -79,6 +79,10 @@ class Transaction extends Equatable {
         'account_id': accountId,
         'credit_card_id': creditCardId,
         'note': note,
+        'recurring_transaction_id': recurringTransactionId,
+        'installment_plan_id': installmentPlanId,
+        'installment_number': installmentNumber,
+        'installment_total': installmentTotal,
       };
 
   @override

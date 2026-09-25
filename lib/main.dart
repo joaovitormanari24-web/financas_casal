@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'core/config/supabase_config.dart';
+import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 
 Future<void> main() async {
@@ -21,32 +23,20 @@ class FinancasCasalApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return MaterialApp.router(
       title: 'Finanças do Casal',
       debugShowCheckedModeBanner: false,
       locale: const Locale('pt', 'BR'),
       supportedLocales: const [Locale('pt', 'BR')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.system,
-      // TODO: substituir por AppRouter (go_router) assim que as telas de
-      // auth/home estiverem prontas — ver lib/core/router.
-      home: const _Bootstrap(),
-    );
-  }
-}
-
-/// Placeholder temporário até o roteamento (auth gate + shell de navegação)
-/// ser implementado na próxima etapa.
-class _Bootstrap extends StatelessWidget {
-  const _Bootstrap();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Text('Finanças do Casal — em construção'),
-      ),
+      routerConfig: AppRouter.router,
     );
   }
 }
