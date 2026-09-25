@@ -38,3 +38,6 @@ windows/flutter/generated_plugin_registrant.*
 # SO
 .DS_Store
 Thumbs.db
+
+# Scripts/artefatos de debug local (headless Chrome, capturas de tela)
+scratch_shots/

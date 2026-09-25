@@ -33,6 +33,31 @@ class HouseholdRepository {
     return Household.fromJson(householdJson);
   }
 
+  Future<List<HouseholdMember>> fetchMembers(String householdId) async {
+    final rows = await _client
+        .from('household_members')
+        .select()
+        .eq('household_id', householdId)
+        .order('created_at');
+    return rows.map((row) => HouseholdMember.fromJson(row)).toList();
+  }
+
+  /// O registro de membro do usuário logado dentro deste household —
+  /// usado como valor padrão de "pago por" ao lançar uma transação.
+  Future<HouseholdMember?> fetchCurrentMember(String householdId) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return null;
+
+    final row = await _client
+        .from('household_members')
+        .select()
+        .eq('household_id', householdId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+    return row == null ? null : HouseholdMember.fromJson(row);
+  }
+
   Future<String> createHousehold({
     required String householdName,
     required String displayName,
