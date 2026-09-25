@@ -111,6 +111,16 @@
         if (document.visibilityState === 'visible') checkForUpdate();
       });
       setInterval(checkForUpdate, 60000);
+
+      // iOS "Adicionar à Tela de Início": reabrir o app às vezes restaura
+      // uma foto congelada da página (bfcache) em vez de recarregar de
+      // verdade — nesse caso nem o JS acima chega a rodar de novo a tempo.
+      // event.persisted avisa quando isso aconteceu; força reload.
+      window.addEventListener('pageshow', function(event) {
+        if (event.persisted) {
+          window.location.reload();
+        }
+      });
     })();
   </script>
   <!--
