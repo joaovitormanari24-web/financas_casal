@@ -65,6 +65,15 @@ class CreditCard extends Equatable {
         dueDay: json['due_day'] as int,
       );
 
+  Map<String, dynamic> toInsertJson() => {
+        'household_id': householdId,
+        'name': name,
+        'institution': institution,
+        'credit_limit': limit,
+        'closing_day': closingDay,
+        'due_day': dueDay,
+      };
+
   @override
   List<Object?> get props => [id, householdId, name, institution, limit];
 }

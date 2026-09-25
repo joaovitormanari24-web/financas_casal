@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/finance_providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../credit_cards/screens/credit_cards_screen.dart';
 import '../../goals/screens/goals_screen.dart';
 import '../../recurring/screens/recurring_transactions_screen.dart';
 import 'home_shell.dart';
@@ -23,6 +24,7 @@ class _RootShellState extends ConsumerState<RootShell> {
     HomeShell(),
     GoalsScreen(),
     RecurringTransactionsScreen(),
+    CreditCardsScreen(),
   ];
 
   @override
@@ -55,6 +57,11 @@ class _RootShellState extends ConsumerState<RootShell> {
             icon: Icon(Icons.autorenew_outlined),
             selectedIcon: Icon(Icons.autorenew_rounded),
             label: 'Recorrentes',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.credit_card_outlined),
+            selectedIcon: Icon(Icons.credit_card_rounded),
+            label: 'Cartões',
           ),
         ],
       ),
