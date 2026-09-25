@@ -33,6 +33,36 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <!-- Diagnostic overlay: shows JS execution + any boot error visibly, since we
+       have no devtools access on the target device. Remove once boot is fixed. -->
+  <div id="boot-diag" style="position:fixed;top:0;left:0;right:0;padding:10px 14px;
+      background:#111;color:#0f0;font:12px/1.4 monospace;white-space:pre-wrap;
+      z-index:999999;max-height:60vh;overflow:auto;">Boot diag: script executing, elapsed 0s</div>
+  <script>
+    (function() {
+      var el = document.getElementById('boot-diag');
+      var start = Date.now();
+      var timer = setInterval(function() {
+        var first = el.firstChild;
+        var secs = Math.round((Date.now() - start) / 1000);
+        if (first && first.nodeType === 3) {
+          first.textContent = 'Boot diag: script executing, elapsed ' + secs + 's';
+        }
+      }, 1000);
+      function log(msg) {
+        el.appendChild(document.createElement('br'));
+        el.appendChild(document.createTextNode(msg));
+      }
+      window.addEventListener('error', function(e) {
+        log('ERROR: ' + (e.message || e) + (e.filename ? (' @ ' + e.filename + ':' + e.lineno) : ''));
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        var reason = e.reason;
+        log('UNHANDLED REJECTION: ' + (reason && (reason.message || reason.toString ? reason.toString() : reason)));
+      });
+      log('crossOriginIsolated=' + window.crossOriginIsolated + ' ua=' + navigator.userAgent);
+    })();
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
