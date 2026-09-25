@@ -42,6 +42,13 @@ class HomeShell extends ConsumerWidget {
       ));
     } catch (_) {
       Haptics.warning();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Não foi possível gerar o convite. Tente novamente.'),
+          ),
+        );
+      }
     }
   }
 
