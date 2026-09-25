@@ -33,6 +33,55 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <div id="app-loading" style="position:fixed;inset:0;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;background:#FAFAF8;
+      font-family:-apple-system,BlinkMacSystemFont,sans-serif;z-index:999999;
+      transition:opacity .3s ease;">
+    <div style="width:36px;height:36px;border:3px solid #E4E2DD;border-top-color:#1F6F5C;
+        border-radius:50%;animation:app-spin .8s linear infinite;"></div>
+    <div style="margin-top:16px;font-size:15px;color:#6B6E6B;">Carregando…</div>
+    <div id="app-loading-slow" style="display:none;margin-top:28px;text-align:center;
+        max-width:300px;padding:0 20px;">
+      <div style="font-size:13px;color:#6B6E6B;margin-bottom:14px;">
+        Isso está demorando mais que o normal. Sua conexão pode estar lenta.
+      </div>
+      <button onclick="location.reload()" style="padding:10px 22px;border-radius:999px;
+          border:none;background:#1A1D1B;color:#FAFAF8;font-size:14px;font-weight:600;">
+        Recarregar
+      </button>
+      <div id="app-loading-log" style="margin-top:18px;font-size:10px;color:#A1A39F;
+          font-family:monospace;white-space:pre-wrap;text-align:left;"></div>
+    </div>
+  </div>
+  <style>@keyframes app-spin { to { transform: rotate(360deg); } }</style>
+  <script>
+    (function() {
+      var errors = [];
+      window.addEventListener('error', function(e) {
+        errors.push((e.message || e) + (e.filename ? (' @ ' + e.filename.split('/').pop() + ':' + e.lineno) : ''));
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        var r = e.reason;
+        errors.push('rejection: ' + (r && r.toString ? r.toString() : r));
+      });
+      window.addEventListener('flutter-first-frame', function() {
+        var el = document.getElementById('app-loading');
+        if (el) {
+          el.style.opacity = '0';
+          setTimeout(function() { el.remove(); }, 300);
+        }
+      });
+      setTimeout(function() {
+        var loading = document.getElementById('app-loading');
+        var slow = document.getElementById('app-loading-slow');
+        if (loading && slow) {
+          slow.style.display = 'block';
+          document.getElementById('app-loading-log').textContent =
+              errors.length ? errors.join('\n') : ('sem erros; crossOriginIsolated=' + window.crossOriginIsolated);
+        }
+      }, 15000);
+    })();
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
