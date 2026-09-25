@@ -245,6 +245,8 @@ class _TransactionsList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final transactionsAsync = ref.watch(transactionsProvider);
     final categoriesAsync = ref.watch(categoriesProvider);
+    final membersAsync = ref.watch(householdMembersProvider);
+    final currentMemberAsync = ref.watch(currentMemberProvider);
 
     return transactionsAsync.when(
       loading: () => const Padding(
@@ -275,11 +277,26 @@ class _TransactionsList extends ConsumerWidget {
           for (final category in categoriesAsync.valueOrNull ?? const [])
             category.id: category,
         };
+        final members = membersAsync.valueOrNull ?? const [];
+        final membersById = {for (final member in members) member.id: member};
+        final currentMemberId = currentMemberAsync.valueOrNull?.id;
 
         return Column(
           children: transactions.map((transaction) {
             final category = categoriesById[transaction.categoryId];
-            return _TransactionTile(transaction: transaction, categoryName: category?.name, categoryIcon: category?.icon, categoryColor: category?.colorHex);
+            final payer = membersById[transaction.paidByMemberId];
+            final paidByLabel = members.length > 1
+                ? (payer == null
+                    ? null
+                    : (payer.id == currentMemberId ? 'Você' : payer.displayName))
+                : null;
+            return _TransactionTile(
+              transaction: transaction,
+              categoryName: category?.name,
+              categoryIcon: category?.icon,
+              categoryColor: category?.colorHex,
+              paidByLabel: paidByLabel,
+            );
           }).toList(),
         );
       },
@@ -293,12 +310,16 @@ class _TransactionTile extends StatelessWidget {
     required this.categoryName,
     required this.categoryIcon,
     required this.categoryColor,
+    required this.paidByLabel,
   });
 
   final models.Transaction transaction;
   final String? categoryName;
   final String? categoryIcon;
   final String? categoryColor;
+
+  /// "Você"/nome do parceiro(a) — nulo se o household só tem 1 membro.
+  final String? paidByLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -339,7 +360,9 @@ class _TransactionTile extends StatelessWidget {
               children: [
                 Text(transaction.description, style: AppTypography.body),
                 Text(
-                  categoryName ?? 'Sem categoria',
+                  paidByLabel == null
+                      ? (categoryName ?? 'Sem categoria')
+                      : '${categoryName ?? 'Sem categoria'} · $paidByLabel',
                   style: AppTypography.caption.copyWith(color: palette.textTertiary),
                 ),
               ],
