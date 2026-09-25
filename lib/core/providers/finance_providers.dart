@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/repositories/category_repository.dart';
+import '../../data/repositories/goal_repository.dart';
 import '../../data/repositories/transaction_repository.dart';
 import '../../models/category.dart';
+import '../../models/goal.dart';
 import '../../models/household.dart';
 import '../../models/transaction.dart';
 import 'app_providers.dart';
@@ -13,6 +15,16 @@ final categoryRepositoryProvider = Provider<CategoryRepository>((ref) {
 
 final transactionRepositoryProvider = Provider<TransactionRepository>((ref) {
   return TransactionRepository(ref.watch(supabaseClientProvider));
+});
+
+final goalRepositoryProvider = Provider<GoalRepository>((ref) {
+  return GoalRepository(ref.watch(supabaseClientProvider));
+});
+
+final goalsProvider = FutureProvider<List<Goal>>((ref) async {
+  final household = await ref.watch(currentHouseholdProvider.future);
+  if (household == null) return const [];
+  return ref.watch(goalRepositoryProvider).fetchForHousehold(household.id);
 });
 
 /// Mês de referência exibido na Home — controla o dashboard e a lista de

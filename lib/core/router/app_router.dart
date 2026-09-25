@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/repositories/household_repository.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/signup_screen.dart';
-import '../../features/home/screens/home_shell.dart';
+import '../../features/home/screens/root_shell.dart';
 import '../../features/onboarding/screens/household_setup_screen.dart';
 import '../config/supabase_config.dart';
 
@@ -64,7 +64,7 @@ class AppRouter {
       ),
       GoRoute(
         path: AppRoutes.home,
-        builder: (context, state) => const HomeShell(),
+        builder: (context, state) => const RootShell(),
       ),
     ],
   );
