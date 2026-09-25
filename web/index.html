@@ -82,6 +82,37 @@
       }, 15000);
     })();
   </script>
+  <script>
+    // Auto-update: compara o ETag de "/" com o que carregou nesta sessão.
+    // Roda ao voltar de segundo plano (essencial em PWA "Adicionar à Tela de
+    // Início" no iOS, que pode ficar suspenso por dias sem checar nada) e
+    // periodicamente enquanto o app está em primeiro plano.
+    (function() {
+      var currentEtag = null;
+
+      function checkForUpdate() {
+        fetch(window.location.pathname, { cache: 'no-store', method: 'HEAD' })
+          .then(function(res) {
+            var etag = res.headers.get('etag');
+            if (!etag) return;
+            if (currentEtag === null) {
+              currentEtag = etag;
+              return;
+            }
+            if (etag !== currentEtag) {
+              window.location.reload();
+            }
+          })
+          .catch(function() {});
+      }
+
+      checkForUpdate();
+      document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') checkForUpdate();
+      });
+      setInterval(checkForUpdate, 60000);
+    })();
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
