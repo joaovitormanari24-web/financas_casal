@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../data/repositories/category_repository.dart';
 import '../../data/repositories/goal_repository.dart';
@@ -85,4 +86,43 @@ final monthSummaryProvider = Provider<MonthSummary>((ref) {
     }
   }
   return MonthSummary(income: income, expense: expense);
+});
+
+/// Assina mudanças em tempo real de `transactions` e `goals` do household
+/// atual e invalida os providers correspondentes — assim, um lançamento ou
+/// aporte feito pelo parceiro(a) aparece sem precisar reabrir o app.
+/// Ativado assistindo esse provider a partir de um widget de longa duração
+/// (ex.: [RootShell]).
+final realtimeSyncProvider = Provider<void>((ref) {
+  final household = ref.watch(currentHouseholdProvider).valueOrNull;
+  if (household == null) return;
+
+  final client = ref.watch(supabaseClientProvider);
+  final channel = client
+      .channel('household-${household.id}')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'transactions',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'household_id',
+          value: household.id,
+        ),
+        callback: (_) => ref.invalidate(transactionsProvider),
+      )
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'goals',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'household_id',
+          value: household.id,
+        ),
+        callback: (_) => ref.invalidate(goalsProvider),
+      )
+      .subscribe();
+
+  ref.onDispose(() => client.removeChannel(channel));
 });
