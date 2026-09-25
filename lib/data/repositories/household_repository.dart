@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/household.dart';
 
@@ -69,12 +71,30 @@ class HouseholdRepository {
     return householdId as String;
   }
 
+  /// Gera o código diretamente via insert na tabela (RLS já garante que só
+  /// um membro do household pode criar um convite) em vez de RPC — evita um
+  /// bug observado de inconsistência de cache de schema entre réplicas do
+  /// PostgREST que fazia a função `create_household_invite` retornar 404
+  /// de forma intermitente.
   Future<String> createInvite({required String householdId}) async {
-    final code = await _client.rpc(
-      'create_household_invite',
-      params: {'target_household_id': householdId},
-    );
-    return code as String;
+    final member = await fetchCurrentMember(householdId);
+    if (member == null) {
+      throw StateError('Usuário não é membro deste household');
+    }
+
+    final code = _generateInviteCode();
+    await _client.from('household_invites').insert({
+      'household_id': householdId,
+      'code': code,
+      'created_by_member_id': member.id,
+    });
+    return code;
+  }
+
+  String _generateInviteCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final random = Random.secure();
+    return List.generate(6, (_) => chars[random.nextInt(chars.length)]).join();
   }
 
   Future<String> redeemInvite({
