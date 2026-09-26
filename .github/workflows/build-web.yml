@@ -1,0 +1,32 @@
+name: Build web
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Placeholder .env (real credentials are swapped in after download)
+        run: cp .env.example .env
+
+      - run: flutter pub get
+
+      - run: >
+          flutter build web --release --base-href / --dart-define=UseLocalCanvasKit=true
+
+      - name: Force local CanvasKit (avoid gstatic CDN dependency)
+        run: |
+          sed -i 's/_flutter.buildConfig = {"engineRevision"/_flutter.buildConfig = {"useLocalCanvasKit":true,"engineRevision"/' build/web/flutter_bootstrap.js
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: build/web
+          retention-days: 7
