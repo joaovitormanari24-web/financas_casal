@@ -13,10 +13,30 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
+// Chamado direto do navegador — precisa responder o preflight OPTIONS do
+// CORS, senão o fetch nunca chega a sair (mesma causa do bug visto em
+// pluggy-connect-token/pluggy-sync-item).
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
-    return new Response(JSON.stringify({ error: "missing_authorization" }), { status: 401 });
+    return jsonResponse({ error: "missing_authorization" }, 401);
   }
 
   const callerClient = createClient(SUPABASE_URL, ANON_KEY, {
@@ -24,7 +44,7 @@ Deno.serve(async (req) => {
   });
   const { data: userData, error: userError } = await callerClient.auth.getUser();
   if (userError || !userData.user) {
-    return new Response(JSON.stringify({ error: "invalid_session" }), { status: 401 });
+    return jsonResponse({ error: "invalid_session" }, 401);
   }
   const userId = userData.user.id;
 
@@ -36,7 +56,7 @@ Deno.serve(async (req) => {
     .eq("user_id", userId);
 
   if (membershipError) {
-    return new Response(JSON.stringify({ error: membershipError.message }), { status: 500 });
+    return jsonResponse({ error: membershipError.message }, 500);
   }
 
   for (const membership of memberships ?? []) {
@@ -46,18 +66,18 @@ Deno.serve(async (req) => {
       .eq("household_id", membership.household_id);
 
     if (countError) {
-      return new Response(JSON.stringify({ error: countError.message }), { status: 500 });
+      return jsonResponse({ error: countError.message }, 500);
     }
 
     if ((count ?? 0) > 1) {
-      return new Response(
-        JSON.stringify({
+      return jsonResponse(
+        {
           error: "shared_household",
           message:
             "Você compartilha um household com outra pessoa — exclua sua conta só depois que " +
             "ela sair do household (Configurações > Sair do household), pra não apagar os dados dela também.",
-        }),
-        { status: 409, headers: { "Content-Type": "application/json" } },
+        },
+        409,
       );
     }
 
@@ -67,10 +87,8 @@ Deno.serve(async (req) => {
 
   const { error: deleteUserError } = await admin.auth.admin.deleteUser(userId);
   if (deleteUserError) {
-    return new Response(JSON.stringify({ error: deleteUserError.message }), { status: 500 });
+    return jsonResponse({ error: deleteUserError.message }, 500);
   }
 
-  return new Response(JSON.stringify({ success: true }), {
-    headers: { "Content-Type": "application/json" },
-  });
+  return jsonResponse({ success: true });
 });

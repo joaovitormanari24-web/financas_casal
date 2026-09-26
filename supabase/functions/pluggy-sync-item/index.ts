@@ -8,10 +8,27 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
-    return new Response(JSON.stringify({ error: "missing_authorization" }), { status: 401 });
+    return jsonResponse({ error: "missing_authorization" }, 401);
   }
 
   const callerClient = createClient(SUPABASE_URL, ANON_KEY, {
@@ -19,7 +36,7 @@ Deno.serve(async (req) => {
   });
   const { data: userData, error: userError } = await callerClient.auth.getUser();
   if (userError || !userData.user) {
-    return new Response(JSON.stringify({ error: "invalid_session" }), { status: 401 });
+    return jsonResponse({ error: "invalid_session" }, 401);
   }
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
@@ -27,7 +44,7 @@ Deno.serve(async (req) => {
   try {
     const { itemId, institutionName } = await req.json();
     if (!itemId) {
-      return new Response(JSON.stringify({ error: "missing_item_id" }), { status: 400 });
+      return jsonResponse({ error: "missing_item_id" }, 400);
     }
 
     const { data: member, error: memberError } = await admin
@@ -37,7 +54,7 @@ Deno.serve(async (req) => {
       .limit(1)
       .single();
     if (memberError || !member) {
-      return new Response(JSON.stringify({ error: "no_household" }), { status: 400 });
+      return jsonResponse({ error: "no_household" }, 400);
     }
 
     await admin.from("bank_connections").upsert(
@@ -51,10 +68,8 @@ Deno.serve(async (req) => {
     );
 
     const result = await syncItem(admin, itemId);
-    return new Response(JSON.stringify({ success: true, ...result }), {
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse({ success: true, ...result });
   } catch (err) {
-    return new Response(JSON.stringify({ error: String(err) }), { status: 500 });
+    return jsonResponse({ error: String(err) }, 500);
   }
 });

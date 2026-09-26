@@ -7,6 +7,23 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const PLUGGY_CLIENT_ID = Deno.env.get("PLUGGY_CLIENT_ID")!;
 const PLUGGY_CLIENT_SECRET = Deno.env.get("PLUGGY_CLIENT_SECRET")!;
 
+// O app chama isso direto do navegador (fetch cross-origin), que sempre
+// manda um OPTIONS de "preflight" antes da chamada de verdade — sem
+// responder esse preflight com os headers certos, o navegador nunca chega
+// a mandar a chamada real (é o que estava dando o erro reportado).
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 async function getPluggyApiKey(): Promise<string> {
   const res = await fetch("https://api.pluggy.ai/auth", {
     method: "POST",
@@ -21,9 +38,13 @@ async function getPluggyApiKey(): Promise<string> {
 }
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
-    return new Response(JSON.stringify({ error: "missing_authorization" }), { status: 401 });
+    return jsonResponse({ error: "missing_authorization" }, 401);
   }
 
   const callerClient = createClient(SUPABASE_URL, ANON_KEY, {
@@ -31,7 +52,7 @@ Deno.serve(async (req) => {
   });
   const { data: userData, error: userError } = await callerClient.auth.getUser();
   if (userError || !userData.user) {
-    return new Response(JSON.stringify({ error: "invalid_session" }), { status: 401 });
+    return jsonResponse({ error: "invalid_session" }, 401);
   }
 
   try {
@@ -42,16 +63,14 @@ Deno.serve(async (req) => {
       body: JSON.stringify({ clientUserId: userData.user.id }),
     });
     if (!res.ok) {
-      return new Response(
-        JSON.stringify({ error: "pluggy_connect_token_failed", details: await res.text() }),
-        { status: 502 },
+      return jsonResponse(
+        { error: "pluggy_connect_token_failed", details: await res.text() },
+        502,
       );
     }
     const data = await res.json();
-    return new Response(JSON.stringify({ connectToken: data.accessToken }), {
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse({ connectToken: data.accessToken });
   } catch (err) {
-    return new Response(JSON.stringify({ error: String(err) }), { status: 500 });
+    return jsonResponse({ error: String(err) }, 500);
   }
 });
