@@ -88,6 +88,22 @@ class TransactionRepository {
     await _client.from('transactions').delete().eq('id', id);
   }
 
+  /// Pendências com vencimento já passado — não tem recorte de mês porque
+  /// uma conta esquecida do mês passado não deve sumir só porque a Home
+  /// está olhando o mês atual.
+  Future<List<Transaction>> fetchOverdue(String householdId) async {
+    final today = DateTime.now();
+    final todayOnly = DateTime(today.year, today.month, today.day);
+    final rows = await _client
+        .from('transactions')
+        .select()
+        .eq('household_id', householdId)
+        .eq('status', 'pending')
+        .lt('date', todayOnly.toIso8601String())
+        .order('date');
+    return rows.map((row) => Transaction.fromJson(row)).toList();
+  }
+
   /// Confirma que um lançamento pendente já foi pago — a partir daí ele
   /// passa a contar no saldo real da conta.
   Future<void> markPaid(String id) async {

@@ -15,6 +15,7 @@ IconData _iconForKind(String kind) => switch (kind) {
       'recurring' => Icons.autorenew_rounded,
       'goal' => Icons.track_changes_rounded,
       'reminder' => Icons.notifications_active_outlined,
+      'overdue' => Icons.event_busy_rounded,
       _ => Icons.info_outline_rounded,
     };
 

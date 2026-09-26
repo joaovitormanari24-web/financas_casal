@@ -255,6 +255,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           paidByMemberId: _paidByMemberId!,
           paymentMethod: _paymentMethod,
           accountId: _accountId,
+          status: _status,
         );
         await ref.read(transactionRepositoryProvider).update(widget.existing!.id, transaction);
         await _syncReceipt(widget.existing!.id, household.id);
@@ -273,6 +274,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
               paidByMemberId: _paidByMemberId!,
               paymentMethod: _paymentMethod,
               accountId: _accountId,
+              status: _status,
             );
             final created =
                 await ref.read(transactionRepositoryProvider).create(transaction);
@@ -672,6 +674,23 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
             subtitle: Text(DateFormat('dd/MM/yyyy', 'pt_BR').format(_date)),
             trailing: const Icon(Icons.calendar_today_rounded, size: 20),
             onTap: _pickDate,
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text('Já foi pago?', style: AppTypography.captionEmphasis),
+            subtitle: Text(
+              _status == TransactionStatus.paid
+                  ? 'Já saiu/entrou da conta.'
+                  : _isFutureDate(_date)
+                      ? 'Agendado — só conta no saldo quando marcar como pago.'
+                      : 'Pendente — se passar do dia sem marcar, fica atrasado.',
+              style: AppTypography.caption,
+            ),
+            value: _status == TransactionStatus.paid,
+            onChanged: (value) => setState(() {
+              _statusManuallySet = true;
+              _status = value ? TransactionStatus.paid : TransactionStatus.pending;
+            }),
           ),
         ];
       case TxRepeatMode.installments:

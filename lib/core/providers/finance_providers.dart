@@ -99,6 +99,14 @@ final transactionsProvider = FutureProvider<List<Transaction>>((ref) async {
   return repo.fetchForMonth(householdId: household.id, referenceMonth: month);
 });
 
+/// Pendências vencidas de todo o histórico (não só o mês selecionado) —
+/// alimenta o aviso de "contas atrasadas" na Home.
+final overdueTransactionsProvider = FutureProvider<List<Transaction>>((ref) async {
+  final household = await ref.watch(currentHouseholdProvider.future);
+  if (household == null) return const [];
+  return ref.watch(transactionRepositoryProvider).fetchOverdue(household.id);
+});
+
 /// Texto de busca por descrição na lista de lançamentos da Home.
 final transactionSearchQueryProvider = StateProvider<String>((ref) => '');
 

@@ -129,6 +129,7 @@ class HomeShell extends ConsumerWidget {
           child: ListView(
             padding: const EdgeInsets.all(AppSpacing.screenPadding),
             children: [
+              const _OverdueBanner(),
               const _MonthSelector(),
               const SizedBox(height: AppSpacing.md),
               const _MonthSummaryCard(),
@@ -194,6 +195,93 @@ class _NotificationsButton extends ConsumerWidget {
       onPressed: () => unawaited(
         Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+        ),
+      ),
+    );
+  }
+}
+
+/// Contas pendentes com vencimento já passado, de qualquer mês — some
+/// sozinho quando não há nenhuma.
+class _OverdueBanner extends ConsumerWidget {
+  const _OverdueBanner();
+
+  Future<void> _markPaid(BuildContext context, WidgetRef ref, String id) async {
+    try {
+      await ref.read(transactionRepositoryProvider).markPaid(id);
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(overdueTransactionsProvider);
+      ref.invalidate(accountsProvider);
+      Haptics.success();
+    } catch (_) {
+      Haptics.warning();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível marcar como pago.')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final overdue = ref.watch(overdueTransactionsProvider).valueOrNull ?? const [];
+    if (overdue.isEmpty) return const SizedBox.shrink();
+
+    final palette = AppColors.of(context);
+    final total = overdue.fold<double>(0, (sum, t) => sum + t.amount);
+    const maxShown = 4;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Card(
+        color: palette.expense.withValues(alpha: 0.1),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.event_busy_rounded, color: palette.expense),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      '${overdue.length == 1 ? '1 conta atrasada' : '${overdue.length} contas atrasadas'} '
+                      '· ${CurrencyFormatter.format(total)}',
+                      style: AppTypography.bodyEmphasis.copyWith(color: palette.expense),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              ...overdue.take(maxShown).map((t) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${t.description} · ${CurrencyFormatter.format(t.amount)}',
+                          style: AppTypography.caption,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => unawaited(_markPaid(context, ref, t.id)),
+                        child: const Text('Marcar pago'),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+              if (overdue.length > maxShown)
+                Text(
+                  '+ ${overdue.length - maxShown} outra(s)',
+                  style: AppTypography.caption.copyWith(color: palette.textTertiary),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -1000,6 +1088,23 @@ class _TransactionTile extends ConsumerWidget {
     );
   }
 
+  Future<void> _markPaid(BuildContext context, WidgetRef ref) async {
+    try {
+      await ref.read(transactionRepositoryProvider).markPaid(transaction.id);
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(overdueTransactionsProvider);
+      ref.invalidate(accountsProvider);
+      Haptics.success();
+    } catch (_) {
+      Haptics.warning();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível marcar como pago.')),
+        );
+      }
+    }
+  }
+
   Future<void> _undoDelete(
     BuildContext context,
     WidgetRef ref,
@@ -1082,15 +1187,46 @@ class _TransactionTile extends ConsumerWidget {
                     ],
                   ],
                 ),
-                Text(
-                  paidByLabel == null
-                      ? (categoryName ?? 'Sem categoria')
-                      : '${categoryName ?? 'Sem categoria'} · $paidByLabel',
-                  style: AppTypography.caption.copyWith(color: palette.textTertiary),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        paidByLabel == null
+                            ? (categoryName ?? 'Sem categoria')
+                            : '${categoryName ?? 'Sem categoria'} · $paidByLabel',
+                        style: AppTypography.caption.copyWith(color: palette.textTertiary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (transaction.isPending) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: (transaction.isOverdue ? palette.expense : palette.warning)
+                              .withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                        ),
+                        child: Text(
+                          transaction.isOverdue ? 'Atrasado' : 'Pendente',
+                          style: AppTypography.caption.copyWith(
+                            color: transaction.isOverdue ? palette.expense : palette.warning,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
           ),
+          if (transaction.isPending)
+            IconButton(
+              tooltip: 'Marcar como pago',
+              icon: Icon(Icons.check_circle_outline_rounded, color: palette.textTertiary),
+              onPressed: () => unawaited(_markPaid(context, ref)),
+            ),
           Text(
             '${isExpense ? '-' : '+'} ${CurrencyFormatter.format(transaction.amount)}',
             style: AppTypography.bodyEmphasis.copyWith(
