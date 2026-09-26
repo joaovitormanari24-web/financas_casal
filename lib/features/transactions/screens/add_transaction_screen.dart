@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -14,6 +16,7 @@ import '../../../models/transaction.dart' as models;
 import '../../../shared/utils/category_icons.dart';
 import '../../../shared/utils/haptics.dart';
 import '../../../shared/utils/payment_method_icons.dart';
+import 'add_category_dialog.dart';
 
 /// Como o lançamento se repete. Só é escolhido na criação — editar um
 /// lançamento existente nunca muda seu modo.
@@ -301,6 +304,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     final categoriesAsync = ref.watch(categoriesProvider);
     final membersAsync = ref.watch(householdMembersProvider);
     final currentMemberAsync = ref.watch(currentMemberProvider);
+    final householdId = ref.watch(currentHouseholdProvider).valueOrNull?.id;
 
     currentMemberAsync.whenData((member) {
       if (member != null && _paidByMemberId == null) {
@@ -398,6 +402,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                   data: (categories) => _CategoryGrid(
                     categories: categories,
                     selectedId: _categoryId,
+                    householdId: householdId,
                     onSelected: (id) => setState(() => _categoryId = id),
                   ),
                   loading: () => const Padding(
@@ -632,25 +637,48 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
 
 /// Seletor de categoria em grade: círculo colorido com o ícone da própria
 /// categoria, nome embaixo — mais visual que uma linha de chips de texto.
-class _CategoryGrid extends StatelessWidget {
+class _CategoryGrid extends ConsumerWidget {
   const _CategoryGrid({
     required this.categories,
     required this.selectedId,
+    required this.householdId,
     required this.onSelected,
   });
 
   final List<Category> categories;
   final String? selectedId;
+  final String? householdId;
   final ValueChanged<String> onSelected;
 
+  Future<void> _createCategory(BuildContext context, WidgetRef ref) async {
+    if (householdId == null) return;
+    final result = await showAddCategoryDialog(context);
+    if (result == null) return;
+
+    try {
+      final category = await ref.read(categoryRepositoryProvider).create(
+            householdId: householdId!,
+            name: result.name,
+            icon: result.icon,
+            colorHex: result.colorHex,
+          );
+      ref.invalidate(categoriesProvider);
+      onSelected(category.id);
+      Haptics.success();
+    } catch (_) {
+      Haptics.warning();
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final palette = AppColors.of(context);
 
     return Wrap(
       spacing: AppSpacing.sm,
       runSpacing: AppSpacing.sm,
-      children: categories.map((category) {
+      children: [
+        ...categories.map((category) {
         final selected = category.id == selectedId;
         final color = colorFromHex(category.colorHex);
 
@@ -688,7 +716,34 @@ class _CategoryGrid extends StatelessWidget {
             ),
           ),
         );
-      }).toList(),
+        }),
+        GestureDetector(
+          onTap: () => unawaited(_createCategory(context, ref)),
+          child: SizedBox(
+            width: 72,
+            child: Column(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: palette.backgroundSecondary,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: palette.border),
+                  ),
+                  child: Icon(Icons.add_rounded, color: palette.textSecondary),
+                ),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  'Nova',
+                  style: AppTypography.caption,
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

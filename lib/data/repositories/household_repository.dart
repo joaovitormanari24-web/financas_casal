@@ -107,4 +107,22 @@ class HouseholdRepository {
     );
     return householdId as String;
   }
+
+  Future<void> updateDisplayName({
+    required String memberId,
+    required String displayName,
+  }) async {
+    await _client
+        .from('household_members')
+        .update({'display_name': displayName})
+        .eq('id', memberId);
+  }
+
+  /// Remove o vínculo do usuário logado com o household. Pode falhar com
+  /// uma violação de FK se ele já tiver lançamentos registrados — nesse
+  /// caso o erro é repassado pra tela mostrar uma mensagem clara, em vez de
+  /// apagar dados financeiros em cascata.
+  Future<void> leaveHousehold(String memberId) async {
+    await _client.from('household_members').delete().eq('id', memberId);
+  }
 }

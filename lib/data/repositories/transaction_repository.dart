@@ -26,6 +26,25 @@ class TransactionRepository {
     return rows.map((row) => Transaction.fromJson(row)).toList();
   }
 
+  /// Lançamentos entre duas datas (inclusive [start], exclusive [end]) —
+  /// usado pelo gráfico de evolução mensal, que precisa de vários meses de
+  /// uma vez em vez de um mês por consulta.
+  Future<List<Transaction>> fetchForDateRange({
+    required String householdId,
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final rows = await _client
+        .from('transactions')
+        .select()
+        .eq('household_id', householdId)
+        .gte('date', start.toIso8601String())
+        .lt('date', end.toIso8601String())
+        .order('date');
+
+    return rows.map((row) => Transaction.fromJson(row)).toList();
+  }
+
   Future<Transaction> create(Transaction transaction) async {
     final row = await _client
         .from('transactions')

@@ -13,6 +13,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../features/transactions/screens/add_transaction_screen.dart';
 import '../../budgets/screens/budgets_screen.dart';
+import '../../settings/screens/settings_screen.dart';
 import '../../simulator/screens/simulator_screen.dart';
 import '../../../models/enums.dart';
 import '../../../models/transaction.dart' as models;
@@ -63,10 +64,29 @@ class HomeShell extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: householdAsync.when(
-          data: (household) => Text(household?.name ?? 'Finanças do Casal'),
-          loading: () => const Text('Finanças do Casal'),
-          error: (_, __) => const Text('Finanças do Casal'),
+        title: GestureDetector(
+          onTap: () => unawaited(
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: householdAsync.when(
+                  data: (household) => Text(
+                    household?.name ?? 'Finanças do Casal',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  loading: () => const Text('Finanças do Casal'),
+                  error: (_, __) => const Text('Finanças do Casal'),
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.expand_more_rounded, size: 20),
+            ],
+          ),
         ),
         actions: [
           householdAsync.maybeWhen(
@@ -121,6 +141,8 @@ class HomeShell extends ConsumerWidget {
               ),
               const SizedBox(height: AppSpacing.lg),
               const _SpendingByCategoryChart(),
+              const SizedBox(height: AppSpacing.lg),
+              const _MonthlyTrendChart(),
               const SizedBox(height: AppSpacing.lg),
               Text('Lançamentos', style: AppTypography.title),
               const SizedBox(height: AppSpacing.xs),
@@ -404,6 +426,137 @@ class _SpendingByCategoryChart extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _MonthlyTrendChart extends ConsumerWidget {
+  const _MonthlyTrendChart();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = AppColors.of(context);
+    final trendAsync = ref.watch(monthlyTrendProvider);
+
+    return trendAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (months) {
+        if (months.every((m) => m.income == 0 && m.expense == 0)) {
+          return const SizedBox.shrink();
+        }
+
+        final maxValue = months.fold<double>(
+          0,
+          (max, m) => [max, m.income, m.expense].reduce((a, b) => a > b ? a : b),
+        );
+
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Evolução mensal', style: AppTypography.subtitle),
+                const SizedBox(height: AppSpacing.md),
+                SizedBox(
+                  height: 140,
+                  child: BarChart(
+                    BarChartData(
+                      maxY: maxValue <= 0 ? 100 : maxValue * 1.2,
+                      alignment: BarChartAlignment.spaceAround,
+                      gridData: const FlGridData(show: false),
+                      borderData: FlBorderData(show: false),
+                      titlesData: FlTitlesData(
+                        leftTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                        rightTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                        topTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 24,
+                            getTitlesWidget: (value, meta) {
+                              final index = value.toInt();
+                              if (index < 0 || index >= months.length) {
+                                return const SizedBox.shrink();
+                              }
+                              final label = DateFormat('MMM', 'pt_BR')
+                                  .format(months[index].month)
+                                  .replaceAll('.', '');
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(label, style: AppTypography.caption),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                      barGroups: months.asMap().entries.map((entry) {
+                        return BarChartGroupData(
+                          x: entry.key,
+                          barRods: [
+                            BarChartRodData(
+                              toY: entry.value.income,
+                              color: palette.income,
+                              width: 8,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                            BarChartRodData(
+                              toY: entry.value.expense,
+                              color: palette.expense,
+                              width: 8,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ],
+                          barsSpace: 4,
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _LegendDot(color: palette.income, label: 'Receitas'),
+                    const SizedBox(width: AppSpacing.md),
+                    _LegendDot(color: palette.expense, label: 'Despesas'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _LegendDot extends StatelessWidget {
+  const _LegendDot({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 4),
+        Text(label, style: AppTypography.caption),
+      ],
     );
   }
 }

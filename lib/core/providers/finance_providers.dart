@@ -174,6 +174,56 @@ final financialSimulationRepositoryProvider = Provider<FinancialSimulationReposi
   return FinancialSimulationRepository(ref.watch(supabaseClientProvider));
 });
 
+/// Totais de um mês pro gráfico de evolução — independente do mês
+/// selecionado na Home, sempre os últimos 6 meses a partir de hoje.
+class MonthlyTotals {
+  const MonthlyTotals({required this.month, required this.income, required this.expense});
+
+  final DateTime month;
+  final double income;
+  final double expense;
+}
+
+final monthlyTrendProvider = FutureProvider<List<MonthlyTotals>>((ref) async {
+  final household = await ref.watch(currentHouseholdProvider.future);
+  if (household == null) return const [];
+
+  final now = DateTime.now();
+  final start = DateTime(now.year, now.month - 5, 1);
+  final end = DateTime(now.year, now.month + 1, 1);
+
+  final transactions = await ref.watch(transactionRepositoryProvider).fetchForDateRange(
+        householdId: household.id,
+        start: start,
+        end: end,
+      );
+
+  final incomeByMonth = <DateTime, double>{};
+  final expenseByMonth = <DateTime, double>{};
+  final months = List.generate(6, (i) => DateTime(start.year, start.month + i, 1));
+  for (final month in months) {
+    incomeByMonth[month] = 0;
+    expenseByMonth[month] = 0;
+  }
+
+  for (final t in transactions) {
+    final month = DateTime(t.date.year, t.date.month, 1);
+    if (t.type == TransactionType.income) {
+      incomeByMonth[month] = (incomeByMonth[month] ?? 0) + t.amount;
+    } else if (t.type == TransactionType.expense) {
+      expenseByMonth[month] = (expenseByMonth[month] ?? 0) + t.amount;
+    }
+  }
+
+  return months
+      .map((month) => MonthlyTotals(
+            month: month,
+            income: incomeByMonth[month] ?? 0,
+            expense: expenseByMonth[month] ?? 0,
+          ))
+      .toList();
+});
+
 /// Assina mudanças em tempo real de `transactions` e `goals` do household
 /// atual e invalida os providers correspondentes — assim, um lançamento ou
 /// aporte feito pelo parceiro(a) aparece sem precisar reabrir o app.

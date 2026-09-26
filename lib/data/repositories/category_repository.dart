@@ -16,4 +16,28 @@ class CategoryRepository {
         .order('name');
     return rows.map((row) => Category.fromJson(row)).toList();
   }
+
+  Future<Category> create({
+    required String householdId,
+    required String name,
+    required String icon,
+    required String colorHex,
+  }) async {
+    final row = await _client
+        .from('categories')
+        .insert({
+          'household_id': householdId,
+          'name': name,
+          'icon': icon,
+          'color_hex': colorHex,
+          'is_custom': true,
+        })
+        .select()
+        .single();
+    return Category.fromJson(row);
+  }
+
+  Future<void> delete(String id) async {
+    await _client.from('categories').delete().eq('id', id);
+  }
 }
