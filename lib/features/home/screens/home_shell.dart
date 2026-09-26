@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/finance_providers.dart';
+import '../../../core/providers/theme_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -88,6 +89,7 @@ class HomeShell extends ConsumerWidget {
               ),
             ),
           ),
+          const _ThemeModeButton(),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Sair',
@@ -138,6 +140,50 @@ class HomeShell extends ConsumerWidget {
         foregroundColor: palette.background,
         child: const Icon(Icons.add),
       ),
+    );
+  }
+}
+
+class _ThemeModeButton extends ConsumerWidget {
+  const _ThemeModeButton();
+
+  IconData _iconFor(ThemeMode mode) => switch (mode) {
+        ThemeMode.light => Icons.light_mode_outlined,
+        ThemeMode.dark => Icons.dark_mode_outlined,
+        ThemeMode.system => Icons.brightness_auto_outlined,
+      };
+
+  String _labelFor(ThemeMode mode) => switch (mode) {
+        ThemeMode.light => 'Claro',
+        ThemeMode.dark => 'Escuro',
+        ThemeMode.system => 'Automático',
+      };
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(themeModeProvider);
+
+    return PopupMenuButton<ThemeMode>(
+      tooltip: 'Tema',
+      icon: Icon(_iconFor(themeMode)),
+      onSelected: (mode) =>
+          unawaited(ref.read(themeModeProvider.notifier).setThemeMode(mode)),
+      itemBuilder: (context) => ThemeMode.values.map((mode) {
+        return PopupMenuItem(
+          value: mode,
+          child: Row(
+            children: [
+              Icon(_iconFor(mode), size: 18),
+              const SizedBox(width: AppSpacing.sm),
+              Text(_labelFor(mode)),
+              if (mode == themeMode) ...[
+                const Spacer(),
+                const Icon(Icons.check, size: 18),
+              ],
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 }
