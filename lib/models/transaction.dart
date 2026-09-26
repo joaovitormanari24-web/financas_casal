@@ -107,45 +107,6 @@ class Transaction extends Equatable {
       ];
 }
 
-/// Grupo de parcelas de uma compra parcelada (briefing, seção 33).
-/// As parcelas futuras entram automaticamente na previsão do mês.
-class InstallmentPlan extends Equatable {
-  const InstallmentPlan({
-    required this.id,
-    required this.householdId,
-    required this.description,
-    required this.totalAmount,
-    required this.installmentCount,
-    required this.installmentAmount,
-    required this.firstDueDate,
-    required this.creditCardId,
-  });
-
-  final String id;
-  final String householdId;
-  final String description;
-  final double totalAmount;
-  final int installmentCount;
-  final double installmentAmount;
-  final DateTime firstDueDate;
-  final String creditCardId;
-
-  factory InstallmentPlan.fromJson(Map<String, dynamic> json) =>
-      InstallmentPlan(
-        id: json['id'] as String,
-        householdId: json['household_id'] as String,
-        description: json['description'] as String,
-        totalAmount: (json['total_amount'] as num).toDouble(),
-        installmentCount: json['installment_count'] as int,
-        installmentAmount: (json['installment_amount'] as num).toDouble(),
-        firstDueDate: DateTime.parse(json['first_due_date'] as String),
-        creditCardId: json['credit_card_id'] as String,
-      );
-
-  @override
-  List<Object?> get props => [id, householdId, description, totalAmount];
-}
-
 /// Gasto recorrente (briefing, seção 34): aluguel, assinaturas, etc.
 class RecurringTransaction extends Equatable {
   const RecurringTransaction({
