@@ -90,18 +90,16 @@ export async function syncItem(admin: SupabaseClient, itemId: string) {
       accountId = createdAccount.id;
     }
 
-    let page = 1;
-    let totalPages = 1;
+    // Endpoint v2, paginação por cursor — a v1 (page/pageSize) foi
+    // descontinuada pela Pluggy (410 Gone) antes do previsto.
+    let nextQuery: string | null = `?accountId=${pAccount.id}`;
     let importedForAccount = 0;
+    let pagesFetched = 0;
     const fetchedTransactions: Array<{ amount: number; type: string }> = [];
 
-    do {
-      const txRes = await pluggyGet(
-        `/transactions?accountId=${pAccount.id}&page=${page}&pageSize=500`,
-        apiKey,
-      );
+    while (nextQuery && pagesFetched < 20) {
+      const txRes = await pluggyGet(`/v2/transactions${nextQuery}`, apiKey);
       const results = txRes.results ?? [];
-      totalPages = txRes.totalPages ?? 1;
 
       for (const t of results) {
         fetchedTransactions.push({ amount: Number(t.amount), type: t.type });
@@ -124,8 +122,10 @@ export async function syncItem(admin: SupabaseClient, itemId: string) {
         );
         if (!insertError) importedForAccount += 1;
       }
-      page += 1;
-    } while (page <= totalPages && page <= 20);
+
+      nextQuery = txRes.next ?? null;
+      pagesFetched += 1;
+    }
 
     importedCount += importedForAccount;
 
