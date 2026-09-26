@@ -316,7 +316,16 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                 newAmount: _parseAmount(_newAmountController.text)!,
               );
             }
+            // Se o dia do ciclo atual já chegou (ou passou), gera o
+            // lançamento desse mês/semana na hora — sem isso, só apareceria
+            // no próximo ciclo, quando a tarefa diária rodar.
+            await ref.read(supabaseClientProvider).rpc(
+              'generate_initial_occurrence',
+              params: {'rt_id': created.id},
+            );
             ref.invalidate(recurringTransactionsProvider);
+            ref.invalidate(transactionsProvider);
+            ref.invalidate(overdueTransactionsProvider);
         }
       }
       Haptics.success();
