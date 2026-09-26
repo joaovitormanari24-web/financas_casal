@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../data/repositories/account_repository.dart';
+import '../../data/repositories/bank_connection_repository.dart';
 import '../../data/repositories/budget_repository.dart';
 import '../../data/repositories/category_repository.dart';
 import '../../data/repositories/financial_simulation_repository.dart';
@@ -13,6 +14,7 @@ import '../../data/repositories/recurring_transaction_repository.dart';
 import '../../data/repositories/transaction_repository.dart';
 import '../../models/accounts.dart';
 import '../../models/app_notification.dart';
+import '../../models/bank_connection.dart';
 import '../../models/budget.dart';
 import '../../models/category.dart';
 import '../../models/enums.dart';
@@ -217,6 +219,16 @@ final accountsProvider = FutureProvider<List<Account>>((ref) async {
   final household = await ref.watch(currentHouseholdProvider.future);
   if (household == null) return const [];
   return ref.watch(accountRepositoryProvider).fetchForHousehold(household.id);
+});
+
+final bankConnectionRepositoryProvider = Provider<BankConnectionRepository>((ref) {
+  return BankConnectionRepository(ref.watch(supabaseClientProvider));
+});
+
+final bankConnectionsProvider = FutureProvider<List<BankConnection>>((ref) async {
+  final household = await ref.watch(currentHouseholdProvider.future);
+  if (household == null) return const [];
+  return ref.watch(bankConnectionRepositoryProvider).fetchForHousehold(household.id);
 });
 
 final notificationRepositoryProvider = Provider<NotificationRepository>((ref) {

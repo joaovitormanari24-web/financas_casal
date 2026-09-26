@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/providers/app_lock_provider.dart';
@@ -12,7 +13,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../models/accounts.dart';
+import '../../../models/bank_connection.dart';
 import '../../../models/category.dart';
+import '../../../shared/services/pluggy_connect_service.dart';
 import '../../../shared/services/push_notification_service.dart';
 import '../../../shared/utils/category_icons.dart';
 import '../../../shared/utils/currency_formatter.dart';
@@ -33,6 +36,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isSavingName = false;
   bool _isLeaving = false;
   bool _isDeletingAccount = false;
+  bool _isConnectingBank = false;
+  String? _syncingConnectionId;
   String? _prefilledFrom;
 
   bool _pushSupported = true;
@@ -525,6 +530,57 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  void _invalidateAfterBankSync() {
+    ref.invalidate(bankConnectionsProvider);
+    ref.invalidate(accountsProvider);
+    ref.invalidate(transactionsProvider);
+  }
+
+  Future<void> _connectBank() async {
+    setState(() => _isConnectingBank = true);
+    try {
+      final token = await ref.read(bankConnectionRepositoryProvider).createConnectToken();
+      final itemData = await const PluggyConnectService().open(token);
+      final item = itemData['item'] as Map<String, dynamic>;
+      final itemId = item['id'] as String;
+      final institutionName = (item['connector'] as Map<String, dynamic>?)?['name'] as String?;
+
+      await ref.read(bankConnectionRepositoryProvider).syncItem(
+            itemId: itemId,
+            institutionName: institutionName,
+          );
+      _invalidateAfterBankSync();
+      Haptics.success();
+    } catch (_) {
+      Haptics.warning();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível conectar o banco. Tente novamente.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isConnectingBank = false);
+    }
+  }
+
+  Future<void> _resyncBank(BankConnection connection) async {
+    setState(() => _syncingConnectionId = connection.id);
+    try {
+      await ref.read(bankConnectionRepositoryProvider).syncItem(itemId: connection.pluggyItemId);
+      _invalidateAfterBankSync();
+      Haptics.success();
+    } catch (_) {
+      Haptics.warning();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível sincronizar agora. Tente novamente.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _syncingConnectionId = null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = AppColors.of(context);
@@ -811,6 +867,75 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       );
                     }).toList(),
                   ),
+                );
+              },
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Bancos conectados', style: AppTypography.captionEmphasis),
+                TextButton.icon(
+                  onPressed: _isConnectingBank ? null : () => unawaited(_connectBank()),
+                  icon: _isConnectingBank
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.add_link_rounded, size: 18),
+                  label: const Text('Conectar'),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Consumer(
+              builder: (context, ref, _) {
+                final bankConnectionsAsync = ref.watch(bankConnectionsProvider);
+                return bankConnectionsAsync.when(
+                  loading: () => const Padding(
+                    padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+                    child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                  ),
+                  error: (_, __) =>
+                      Text('Não foi possível carregar.', style: AppTypography.caption),
+                  data: (connections) {
+                    if (connections.isEmpty) {
+                      return Text(
+                        'Nenhum banco conectado — use "Conectar" pra importar '
+                        'lançamentos automaticamente via Open Finance.',
+                        style: AppTypography.caption.copyWith(color: palette.textTertiary),
+                      );
+                    }
+                    return Card(
+                      child: Column(
+                        children: connections.map((connection) {
+                          final isSyncing = _syncingConnectionId == connection.id;
+                          return ListTile(
+                            leading: const Icon(Icons.account_balance_outlined),
+                            title: Text(connection.institutionName ?? 'Banco conectado'),
+                            subtitle: Text(
+                              connection.lastSyncedAt == null
+                                  ? 'Sincronizando...'
+                                  : 'Última sincronização: '
+                                      '${DateFormat('dd/MM HH:mm', 'pt_BR').format(connection.lastSyncedAt!)}',
+                              style: AppTypography.caption,
+                            ),
+                            trailing: IconButton(
+                              icon: isSyncing
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : const Icon(Icons.sync_rounded, size: 20),
+                              onPressed: isSyncing ? null : () => unawaited(_resyncBank(connection)),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    );
+                  },
                 );
               },
             ),

@@ -172,6 +172,36 @@
       };
     })();
   </script>
+  <script src="https://cdn.pluggy.ai/pluggy-connect/v2.8.2/pluggy-connect.js" defer></script>
+  <script>
+    // Ponte pro widget Pluggy Connect (conectar um banco via Open Finance).
+    // O script acima carrega em paralelo; só acessamos window.PluggyConnect
+    // de fato dentro de open(), chamado bem depois (toque do usuário).
+    window.FinancasPluggy = {
+      open: function(connectToken) {
+        return new Promise(function(resolve, reject) {
+          if (typeof PluggyConnect === 'undefined') {
+            reject('widget_not_loaded');
+            return;
+          }
+          var pluggyConnect = new PluggyConnect({
+            connectToken: connectToken,
+            includeSandbox: false,
+            onSuccess: function(itemData) {
+              resolve(JSON.stringify(itemData));
+            },
+            onError: function(error) {
+              reject((error && error.message) || 'pluggy_connect_error');
+            },
+            onClose: function() {
+              reject('closed');
+            },
+          });
+          pluggyConnect.init();
+        });
+      },
+    };
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
