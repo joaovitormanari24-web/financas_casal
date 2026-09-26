@@ -142,11 +142,17 @@ final filteredTransactionsProvider = Provider<List<Transaction>>((ref) {
       ? ref.watch(transactionsProvider).valueOrNull ?? const []
       : ref.watch(globalSearchResultsProvider).valueOrNull ?? const [];
 
-  return transactions.where((t) {
+  final filtered = transactions.where((t) {
     if (categoryId != null && t.categoryId != categoryId) return false;
     if (paymentMethod != null && t.paymentMethod != paymentMethod) return false;
     return true;
   }).toList();
+
+  // Ordem alfabética pela descrição, sempre — não por data.
+  filtered.sort(
+    (a, b) => a.description.toLowerCase().compareTo(b.description.toLowerCase()),
+  );
+  return filtered;
 });
 
 /// Resumo do mês selecionado: receitas, despesas e saldo.
