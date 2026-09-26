@@ -6,10 +6,16 @@ import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/finance_providers.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../models/goal.dart';
 import '../../../shared/utils/haptics.dart';
 
 class AddGoalScreen extends ConsumerStatefulWidget {
-  const AddGoalScreen({super.key});
+  const AddGoalScreen({this.existing, super.key});
+
+  /// Quando presente, a tela edita esta meta em vez de criar uma nova.
+  final Goal? existing;
+
+  bool get isEditing => existing != null;
 
   @override
   ConsumerState<AddGoalScreen> createState() => _AddGoalScreenState();
@@ -17,13 +23,29 @@ class AddGoalScreen extends ConsumerStatefulWidget {
 
 class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _targetAmountController = TextEditingController();
-  final _monthlyContributionController = TextEditingController();
+  late final TextEditingController _nameController;
+  late final TextEditingController _targetAmountController;
+  late final TextEditingController _monthlyContributionController;
 
   DateTime? _targetDate;
   bool _isSubmitting = false;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.existing;
+    _nameController = TextEditingController(text: existing?.name ?? '');
+    _targetAmountController = TextEditingController(
+      text: existing == null ? '' : existing.targetAmount.toStringAsFixed(2).replaceAll('.', ','),
+    );
+    _monthlyContributionController = TextEditingController(
+      text: existing?.monthlyContribution == null
+          ? ''
+          : existing!.monthlyContribution!.toStringAsFixed(2).replaceAll('.', ','),
+    );
+    _targetDate = existing?.targetDate;
+  }
 
   @override
   void dispose() {
@@ -61,19 +83,30 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
     });
 
     try {
-      await ref.read(goalRepositoryProvider).create(
-            householdId: household.id,
-            name: _nameController.text.trim(),
-            targetAmount: _parseAmount(_targetAmountController.text)!,
-            targetDate: _targetDate,
-            monthlyContribution: _parseAmount(_monthlyContributionController.text),
-          );
+      final repository = ref.read(goalRepositoryProvider);
+      if (widget.isEditing) {
+        await repository.update(
+          id: widget.existing!.id,
+          name: _nameController.text.trim(),
+          targetAmount: _parseAmount(_targetAmountController.text)!,
+          targetDate: _targetDate,
+          monthlyContribution: _parseAmount(_monthlyContributionController.text),
+        );
+      } else {
+        await repository.create(
+          householdId: household.id,
+          name: _nameController.text.trim(),
+          targetAmount: _parseAmount(_targetAmountController.text)!,
+          targetDate: _targetDate,
+          monthlyContribution: _parseAmount(_monthlyContributionController.text),
+        );
+      }
       ref.invalidate(goalsProvider);
       Haptics.success();
       if (mounted) Navigator.of(context).pop();
     } catch (_) {
       Haptics.warning();
-      setState(() => _errorMessage = 'Não foi possível criar a meta. Tente novamente.');
+      setState(() => _errorMessage = 'Não foi possível salvar. Tente novamente.');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -82,7 +115,7 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Nova meta')),
+      appBar: AppBar(title: Text(widget.isEditing ? 'Editar meta' : 'Nova meta')),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.screenPadding),
@@ -148,7 +181,7 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
                           height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Criar meta'),
+                      : Text(widget.isEditing ? 'Salvar alterações' : 'Criar meta'),
                 ),
               ],
             ),

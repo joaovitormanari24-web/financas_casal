@@ -38,6 +38,21 @@ class GoalRepository {
     return Goal.fromJson(row);
   }
 
+  Future<void> update({
+    required String id,
+    required String name,
+    required double targetAmount,
+    DateTime? targetDate,
+    double? monthlyContribution,
+  }) async {
+    await _client.from('goals').update({
+      'name': name,
+      'target_amount': targetAmount,
+      'target_date': targetDate?.toIso8601String(),
+      'monthly_contribution': monthlyContribution,
+    }).eq('id', id);
+  }
+
   Future<void> delete(String id) async {
     await _client.from('goals').delete().eq('id', id);
   }

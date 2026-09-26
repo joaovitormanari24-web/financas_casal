@@ -1,11 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../data/repositories/budget_repository.dart';
 import '../../data/repositories/category_repository.dart';
+import '../../data/repositories/financial_simulation_repository.dart';
 import '../../data/repositories/goal_repository.dart';
 import '../../data/repositories/recurring_transaction_repository.dart';
 import '../../data/repositories/transaction_repository.dart';
+import '../../models/budget.dart';
 import '../../models/category.dart';
+import '../../models/enums.dart';
 import '../../models/goal.dart';
 import '../../models/household.dart';
 import '../../models/transaction.dart';
@@ -97,6 +101,52 @@ final monthSummaryProvider = Provider<MonthSummary>((ref) {
     }
   }
   return MonthSummary(income: income, expense: expense);
+});
+
+final budgetRepositoryProvider = Provider<BudgetRepository>((ref) {
+  return BudgetRepository(ref.watch(supabaseClientProvider));
+});
+
+final budgetsProvider = FutureProvider<List<Budget>>((ref) async {
+  final household = await ref.watch(currentHouseholdProvider.future);
+  if (household == null) return const [];
+  final month = ref.watch(selectedMonthProvider);
+  return ref.watch(budgetRepositoryProvider).fetchForMonth(
+        householdId: household.id,
+        referenceMonth: month,
+      );
+});
+
+/// Cruza o limite definido para a categoria no mês com o total já gasto
+/// (via [transactionsProvider]), pra alimentar a barra de progresso.
+class CategoryBudgetProgress {
+  const CategoryBudgetProgress({required this.budget, required this.spent});
+
+  final Budget budget;
+  final double spent;
+
+  double get progress =>
+      budget.limitAmount <= 0 ? 0 : (spent / budget.limitAmount).clamp(0, 2);
+  bool get isOverBudget => spent > budget.limitAmount;
+}
+
+final categoryBudgetProgressProvider = Provider<List<CategoryBudgetProgress>>((ref) {
+  final budgets = ref.watch(budgetsProvider).valueOrNull ?? const [];
+  final transactions = ref.watch(transactionsProvider).valueOrNull ?? const [];
+
+  final spentByCategory = <String, double>{};
+  for (final t in transactions) {
+    if (t.type != TransactionType.expense) continue;
+    spentByCategory.update(t.categoryId, (v) => v + t.amount, ifAbsent: () => t.amount);
+  }
+
+  return budgets
+      .map((b) => CategoryBudgetProgress(budget: b, spent: spentByCategory[b.categoryId] ?? 0))
+      .toList();
+});
+
+final financialSimulationRepositoryProvider = Provider<FinancialSimulationRepository>((ref) {
+  return FinancialSimulationRepository(ref.watch(supabaseClientProvider));
 });
 
 /// Assina mudanças em tempo real de `transactions` e `goals` do household

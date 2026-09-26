@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -10,6 +11,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../features/transactions/screens/add_transaction_screen.dart';
+import '../../budgets/screens/budgets_screen.dart';
+import '../../simulator/screens/simulator_screen.dart';
 import '../../../models/enums.dart';
 import '../../../models/transaction.dart' as models;
 import '../../../shared/utils/category_icons.dart';
@@ -77,6 +80,15 @@ class HomeShell extends ConsumerWidget {
             orElse: () => const SizedBox.shrink(),
           ),
           IconButton(
+            icon: const Icon(Icons.pie_chart_outline_rounded),
+            tooltip: 'Orçamento do mês',
+            onPressed: () => unawaited(
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const BudgetsScreen()),
+              ),
+            ),
+          ),
+          IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Sair',
             onPressed: () => unawaited(ref.read(authRepositoryProvider).signOut()),
@@ -95,6 +107,18 @@ class HomeShell extends ConsumerWidget {
               const _MonthSelector(),
               const SizedBox(height: AppSpacing.md),
               const _MonthSummaryCard(),
+              const SizedBox(height: AppSpacing.sm),
+              OutlinedButton.icon(
+                onPressed: () => unawaited(
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const SimulatorScreen()),
+                  ),
+                ),
+                icon: const Icon(Icons.calculate_outlined, size: 18),
+                label: const Text('Podemos gastar?'),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              const _SpendingByCategoryChart(),
               const SizedBox(height: AppSpacing.lg),
               Text('Lançamentos', style: AppTypography.title),
               const SizedBox(height: AppSpacing.xs),
@@ -234,6 +258,104 @@ class _SummaryStat extends StatelessWidget {
         const SizedBox(height: 2),
         Text(CurrencyFormatter.format(value), style: AppTypography.amountMedium),
       ],
+    );
+  }
+}
+
+class _SpendingByCategoryChart extends ConsumerWidget {
+  const _SpendingByCategoryChart();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = AppColors.of(context);
+    final transactions = ref.watch(transactionsProvider).valueOrNull ?? const [];
+    final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
+    final categoriesById = {for (final c in categories) c.id: c};
+
+    final spentByCategory = <String, double>{};
+    for (final t in transactions) {
+      if (t.type != TransactionType.expense) continue;
+      spentByCategory.update(t.categoryId, (v) => v + t.amount, ifAbsent: () => t.amount);
+    }
+
+    if (spentByCategory.isEmpty) return const SizedBox.shrink();
+
+    final total = spentByCategory.values.fold<double>(0, (a, b) => a + b);
+    final entries = spentByCategory.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Gastos por categoria', style: AppTypography.subtitle),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 120,
+                  height: 120,
+                  child: PieChart(
+                    PieChartData(
+                      sections: entries.map((entry) {
+                        final category = categoriesById[entry.key];
+                        final color = category != null
+                            ? colorFromHex(category.colorHex)
+                            : palette.accent;
+                        return PieChartSectionData(
+                          value: entry.value,
+                          color: color,
+                          radius: 24,
+                          showTitle: false,
+                        );
+                      }).toList(),
+                      centerSpaceRadius: 36,
+                      sectionsSpace: 2,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: entries.take(5).map((entry) {
+                      final category = categoriesById[entry.key];
+                      final color = category != null
+                          ? colorFromHex(category.colorHex)
+                          : palette.accent;
+                      final percent = total <= 0 ? 0 : (entry.value / total * 100).round();
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                            ),
+                            const SizedBox(width: AppSpacing.xs),
+                            Expanded(
+                              child: Text(
+                                category?.name ?? 'Sem categoria',
+                                style: AppTypography.caption,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Text('$percent%', style: AppTypography.captionEmphasis),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

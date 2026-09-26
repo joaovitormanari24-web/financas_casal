@@ -26,6 +26,13 @@ class Budget extends Equatable {
         referenceMonth: DateTime.parse(json['reference_month'] as String),
       );
 
+  Map<String, dynamic> toInsertJson() => {
+        'household_id': householdId,
+        'category_id': categoryId,
+        'limit_amount': limitAmount,
+        'reference_month': referenceMonth.toIso8601String(),
+      };
+
   @override
   List<Object?> get props =>
       [id, householdId, categoryId, limitAmount, referenceMonth];

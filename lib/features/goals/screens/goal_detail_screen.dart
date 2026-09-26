@@ -10,6 +10,7 @@ import '../../../models/goal.dart';
 import '../../../shared/utils/category_icons.dart';
 import '../../../shared/utils/currency_formatter.dart';
 import '../../../shared/utils/haptics.dart';
+import 'add_goal_screen.dart';
 
 class GoalDetailScreen extends ConsumerStatefulWidget {
   const GoalDetailScreen({required this.goal, super.key});
@@ -121,6 +122,12 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
       appBar: AppBar(
         title: Text(goal.name),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => AddGoalScreen(existing: goal)),
+            ),
+          ),
           IconButton(
             icon: _isDeleting
                 ? const SizedBox(
