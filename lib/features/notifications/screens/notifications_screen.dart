@@ -11,6 +11,7 @@ import '../../../shared/utils/haptics.dart';
 
 IconData _iconForKind(String kind) => switch (kind) {
       'budget' => Icons.warning_amber_rounded,
+      'budget_warning' => Icons.hourglass_bottom_rounded,
       'recurring' => Icons.autorenew_rounded,
       'goal' => Icons.track_changes_rounded,
       'reminder' => Icons.notifications_active_outlined,
