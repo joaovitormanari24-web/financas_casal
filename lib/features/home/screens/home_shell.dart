@@ -129,7 +129,6 @@ class HomeShell extends ConsumerWidget {
           child: ListView(
             padding: const EdgeInsets.all(AppSpacing.screenPadding),
             children: [
-              const _OverdueBanner(),
               const _MonthSelector(),
               const SizedBox(height: AppSpacing.md),
               const _MonthSummaryCard(),
@@ -201,92 +200,6 @@ class _NotificationsButton extends ConsumerWidget {
   }
 }
 
-/// Contas pendentes com vencimento já passado, de qualquer mês — some
-/// sozinho quando não há nenhuma.
-class _OverdueBanner extends ConsumerWidget {
-  const _OverdueBanner();
-
-  Future<void> _markPaid(BuildContext context, WidgetRef ref, String id) async {
-    try {
-      await ref.read(transactionRepositoryProvider).markPaid(id);
-      ref.invalidate(transactionsProvider);
-      ref.invalidate(overdueTransactionsProvider);
-      ref.invalidate(accountsProvider);
-      Haptics.success();
-    } catch (_) {
-      Haptics.warning();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Não foi possível marcar como pago.')),
-        );
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final overdue = ref.watch(overdueTransactionsProvider).valueOrNull ?? const [];
-    if (overdue.isEmpty) return const SizedBox.shrink();
-
-    final palette = AppColors.of(context);
-    final total = overdue.fold<double>(0, (sum, t) => sum + t.amount);
-    const maxShown = 4;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: Card(
-        color: palette.expense.withValues(alpha: 0.1),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.event_busy_rounded, color: palette.expense),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      '${overdue.length == 1 ? '1 conta atrasada' : '${overdue.length} contas atrasadas'} '
-                      '· ${CurrencyFormatter.format(total)}',
-                      style: AppTypography.bodyEmphasis.copyWith(color: palette.expense),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              ...overdue.take(maxShown).map((t) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '${t.description} · ${CurrencyFormatter.format(t.amount)}',
-                          style: AppTypography.caption,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => unawaited(_markPaid(context, ref, t.id)),
-                        child: const Text('Marcar pago'),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-              if (overdue.length > maxShown)
-                Text(
-                  '+ ${overdue.length - maxShown} outra(s)',
-                  style: AppTypography.caption.copyWith(color: palette.textTertiary),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _MonthSelector extends ConsumerWidget {
   const _MonthSelector();
