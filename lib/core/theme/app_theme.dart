@@ -120,6 +120,41 @@ class AppTheme {
         ),
         hintStyle: AppTypography.body.copyWith(color: palette.textTertiary),
       ),
+      chipTheme: ChipThemeData(
+        backgroundColor: palette.backgroundSecondary,
+        selectedColor: palette.accentMuted,
+        disabledColor: palette.backgroundSecondary,
+        labelStyle: AppTypography.body.copyWith(color: palette.textPrimary),
+        secondaryLabelStyle: AppTypography.bodyEmphasis.copyWith(color: palette.accent),
+        checkmarkColor: palette.accent,
+        side: BorderSide(color: palette.borderSubtle),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: AppSpacing.xxs,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+        ),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? palette.accentMuted
+                : Colors.transparent,
+          ),
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (states) =>
+                states.contains(WidgetState.selected) ? palette.accent : palette.textSecondary,
+          ),
+          iconColor: WidgetStateProperty.resolveWith(
+            (states) =>
+                states.contains(WidgetState.selected) ? palette.accent : palette.textSecondary,
+          ),
+          side: WidgetStatePropertyAll(BorderSide(color: palette.borderSubtle)),
+          textStyle: WidgetStatePropertyAll(AppTypography.bodyEmphasis),
+        ),
+      ),
     );
   }
 }

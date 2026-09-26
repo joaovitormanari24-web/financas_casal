@@ -4,12 +4,16 @@ import 'package:intl/intl.dart';
 
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/finance_providers.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../models/category.dart';
 import '../../../models/enums.dart';
 import '../../../models/transaction.dart' as models;
 import '../../../shared/utils/category_icons.dart';
 import '../../../shared/utils/haptics.dart';
+import '../../../shared/utils/payment_method_icons.dart';
 
 /// Como o lançamento se repete. Só é escolhido na criação — editar um
 /// lançamento existente nunca muda seu modo.
@@ -389,20 +393,12 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 Text('Categoria', style: AppTypography.captionEmphasis),
-                const SizedBox(height: AppSpacing.xs),
+                const SizedBox(height: AppSpacing.sm),
                 categoriesAsync.when(
-                  data: (categories) => Wrap(
-                    spacing: AppSpacing.xs,
-                    runSpacing: AppSpacing.xs,
-                    children: categories.map((category) {
-                      final selected = category.id == _categoryId;
-                      return ChoiceChip(
-                        label: Text(category.name),
-                        avatar: Icon(categoryIconData(category.icon), size: 18),
-                        selected: selected,
-                        onSelected: (_) => setState(() => _categoryId = category.id),
-                      );
-                    }).toList(),
+                  data: (categories) => _CategoryGrid(
+                    categories: categories,
+                    selectedId: _categoryId,
+                    onSelected: (id) => setState(() => _categoryId = id),
                   ),
                   loading: () => const Padding(
                     padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
@@ -422,6 +418,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                   children: PaymentMethod.values.map((method) {
                     return ChoiceChip(
                       label: Text(method.label),
+                      avatar: Icon(paymentMethodIconData(method), size: 16),
                       selected: method == _paymentMethod,
                       onSelected: (_) => setState(() => _paymentMethod = method),
                     );
@@ -630,5 +627,68 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           ],
         ];
     }
+  }
+}
+
+/// Seletor de categoria em grade: círculo colorido com o ícone da própria
+/// categoria, nome embaixo — mais visual que uma linha de chips de texto.
+class _CategoryGrid extends StatelessWidget {
+  const _CategoryGrid({
+    required this.categories,
+    required this.selectedId,
+    required this.onSelected,
+  });
+
+  final List<Category> categories;
+  final String? selectedId;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppColors.of(context);
+
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: categories.map((category) {
+        final selected = category.id == selectedId;
+        final color = colorFromHex(category.colorHex);
+
+        return GestureDetector(
+          onTap: () => onSelected(category.id),
+          child: SizedBox(
+            width: 72,
+            child: Column(
+              children: [
+                AnimatedContainer(
+                  duration: AppMotion.fast,
+                  curve: AppMotion.enter,
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: selected ? color : color.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                    border: selected ? Border.all(color: color, width: 2) : null,
+                  ),
+                  child: Icon(
+                    categoryIconData(category.icon),
+                    color: selected ? palette.background : color,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  category.name,
+                  style: selected ? AppTypography.captionEmphasis : AppTypography.caption,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
   }
 }
