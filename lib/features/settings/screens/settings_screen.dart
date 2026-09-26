@@ -569,11 +569,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await ref.read(bankConnectionRepositoryProvider).syncItem(itemId: connection.pluggyItemId);
       _invalidateAfterBankSync();
       Haptics.success();
-    } catch (_) {
+    } catch (e) {
       Haptics.warning();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Não foi possível sincronizar agora. Tente novamente.')),
+          SnackBar(content: Text('Erro ao sincronizar: $e')),
         );
       }
     } finally {

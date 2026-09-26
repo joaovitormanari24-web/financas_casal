@@ -57,12 +57,18 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "no_household" }, 400);
     }
 
+    const { data: existingConnection } = await admin
+      .from("bank_connections")
+      .select("id, institution_name")
+      .eq("pluggy_item_id", itemId)
+      .maybeSingle();
+
     await admin.from("bank_connections").upsert(
       {
         household_id: member.household_id,
         member_id: member.id,
         pluggy_item_id: itemId,
-        institution_name: institutionName ?? null,
+        institution_name: institutionName ?? existingConnection?.institution_name ?? null,
       },
       { onConflict: "pluggy_item_id", ignoreDuplicates: false },
     );
@@ -70,6 +76,8 @@ Deno.serve(async (req) => {
     const result = await syncItem(admin, itemId);
     return jsonResponse({ success: true, ...result });
   } catch (err) {
-    return jsonResponse({ error: String(err) }, 500);
+    console.error("pluggy-sync-item error", err);
+    const message = err instanceof Error ? `${err.message}\n${err.stack ?? ""}` : String(err);
+    return jsonResponse({ error: message }, 500);
   }
 });
