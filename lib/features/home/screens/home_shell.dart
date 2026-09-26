@@ -729,6 +729,7 @@ class _TransactionSearchBar extends ConsumerStatefulWidget {
 
 class _TransactionSearchBarState extends ConsumerState<_TransactionSearchBar> {
   late final TextEditingController _controller;
+  Timer? _debounce;
 
   @override
   void initState() {
@@ -738,8 +739,22 @@ class _TransactionSearchBarState extends ConsumerState<_TransactionSearchBar> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _controller.dispose();
     super.dispose();
+  }
+
+  void _onQueryChanged(String value) {
+    _debounce?.cancel();
+    // Busca vazia limpa na hora; texto novo espera um pouco (evita disparar
+    // uma busca em todo o histórico a cada letra digitada).
+    if (value.trim().isEmpty) {
+      ref.read(transactionSearchQueryProvider.notifier).state = value;
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 400), () {
+      ref.read(transactionSearchQueryProvider.notifier).state = value;
+    });
   }
 
   Future<void> _openFilters(BuildContext context, WidgetRef ref) async {
@@ -838,8 +853,7 @@ class _TransactionSearchBarState extends ConsumerState<_TransactionSearchBar> {
               prefixIcon: Icon(Icons.search_rounded, size: 20),
               isDense: true,
             ),
-            onChanged: (value) =>
-                ref.read(transactionSearchQueryProvider.notifier).state = value,
+            onChanged: _onQueryChanged,
           ),
         ),
         const SizedBox(width: AppSpacing.xs),
@@ -873,7 +887,9 @@ class _TransactionsList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final transactionsAsync = ref.watch(transactionsProvider);
+    final isGlobalSearch = ref.watch(transactionSearchQueryProvider).trim().isNotEmpty;
+    final transactionsAsync =
+        isGlobalSearch ? ref.watch(globalSearchResultsProvider) : ref.watch(transactionsProvider);
     final categoriesAsync = ref.watch(categoriesProvider);
     final membersAsync = ref.watch(householdMembersProvider);
     final currentMemberAsync = ref.watch(currentMemberProvider);
@@ -898,7 +914,9 @@ class _TransactionsList extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
             child: Center(
               child: Text(
-                'Nenhum lançamento neste mês ainda.',
+                isGlobalSearch
+                    ? 'Nenhum lançamento encontrado em todo o histórico.'
+                    : 'Nenhum lançamento neste mês ainda.',
                 style: AppTypography.body,
               ),
             ),
@@ -948,7 +966,7 @@ class _TransactionsList extends ConsumerWidget {
   }
 }
 
-class _TransactionTile extends StatelessWidget {
+class _TransactionTile extends ConsumerWidget {
   const _TransactionTile({
     required this.transaction,
     required this.categoryName,
@@ -965,21 +983,64 @@ class _TransactionTile extends StatelessWidget {
   /// "Você"/nome do parceiro(a) — nulo se o household só tem 1 membro.
   final String? paidByLabel;
 
+  Future<void> _openEdit(BuildContext context, WidgetRef ref) async {
+    final deleted = await Navigator.of(context).push<models.Transaction>(
+      MaterialPageRoute(builder: (_) => AddTransactionScreen(existing: transaction)),
+    );
+    if (deleted == null || !context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('"${deleted.description}" excluído.'),
+        action: SnackBarAction(
+          label: 'Desfazer',
+          onPressed: () => unawaited(_undoDelete(context, ref, deleted)),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _undoDelete(
+    BuildContext context,
+    WidgetRef ref,
+    models.Transaction deleted,
+  ) async {
+    try {
+      await ref.read(transactionRepositoryProvider).create(
+            models.Transaction(
+              id: '',
+              householdId: deleted.householdId,
+              type: deleted.type,
+              amount: deleted.amount,
+              description: deleted.description,
+              categoryId: deleted.categoryId,
+              date: deleted.date,
+              paidByMemberId: deleted.paidByMemberId,
+              paymentMethod: deleted.paymentMethod,
+              accountId: deleted.accountId,
+            ),
+          );
+      ref.invalidate(transactionsProvider);
+      Haptics.success();
+    } catch (_) {
+      Haptics.warning();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível desfazer a exclusão.')),
+        );
+      }
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final palette = AppColors.of(context);
     final isExpense = transaction.type == TransactionType.expense;
     final color = categoryColor != null ? colorFromHex(categoryColor!) : palette.accent;
 
     return InkWell(
       borderRadius: BorderRadius.circular(AppRadius.md),
-      onTap: () => unawaited(
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => AddTransactionScreen(existing: transaction),
-          ),
-        ),
-      ),
+      onTap: () => unawaited(_openEdit(context, ref)),
       child: Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       child: Row(

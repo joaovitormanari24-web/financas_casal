@@ -54,6 +54,9 @@ dependencies:
   csv: ^6.0.0
   pdf: ^3.11.1
 
+  # Bloqueio do app por PIN
+  crypto: ^3.0.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

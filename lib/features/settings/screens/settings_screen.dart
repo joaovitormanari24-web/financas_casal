@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/providers/app_lock_provider.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/finance_providers.dart';
 import '../../../core/providers/theme_provider.dart';
@@ -93,6 +94,133 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     } finally {
       if (mounted) setState(() => _isTogglingPush = false);
     }
+  }
+
+  Future<String?> _promptForNewPin() async {
+    final pinController = TextEditingController();
+    final confirmController = TextEditingController();
+    String? error;
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Criar PIN'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: pinController,
+                obscureText: true,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                maxLength: 4,
+                decoration: const InputDecoration(labelText: 'PIN (4 dígitos)', counterText: ''),
+              ),
+              TextField(
+                controller: confirmController,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                maxLength: 4,
+                decoration: const InputDecoration(labelText: 'Confirme o PIN', counterText: ''),
+              ),
+              if (error != null) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () {
+                final pin = pinController.text.trim();
+                final confirm = confirmController.text.trim();
+                if (pin.length != 4 || int.tryParse(pin) == null) {
+                  setDialogState(() => error = 'Use 4 dígitos numéricos');
+                  return;
+                }
+                if (pin != confirm) {
+                  setDialogState(() => error = 'Os PINs não coincidem');
+                  return;
+                }
+                Navigator.of(context).pop(pin);
+              },
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    pinController.dispose();
+    confirmController.dispose();
+    return result;
+  }
+
+  Future<String?> _promptForCurrentPin() async {
+    final controller = TextEditingController();
+    String? error;
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Confirme o PIN atual'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: controller,
+                obscureText: true,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                maxLength: 4,
+                decoration: const InputDecoration(labelText: 'PIN', counterText: ''),
+              ),
+              if (error != null) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () {
+                final pin = controller.text.trim();
+                if (!ref.read(appLockProvider.notifier).verify(pin)) {
+                  setDialogState(() => error = 'PIN incorreto');
+                  return;
+                }
+                Navigator.of(context).pop(pin);
+              },
+              child: const Text('Confirmar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Future<void> _enablePinLock() async {
+    final pin = await _promptForNewPin();
+    if (pin == null) return;
+    await ref.read(appLockProvider.notifier).setPin(pin);
+    ref.read(appUnlockedProvider.notifier).state = true;
+    Haptics.success();
+  }
+
+  Future<void> _disablePinLock() async {
+    final pin = await _promptForCurrentPin();
+    if (pin == null) return;
+    await ref.read(appLockProvider.notifier).clearPin();
+    Haptics.success();
   }
 
   @override
@@ -417,6 +545,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ? null
                     : (value) => unawaited(_togglePush(value)),
               ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Text('Segurança', style: AppTypography.captionEmphasis),
+            const SizedBox(height: AppSpacing.xs),
+            Consumer(
+              builder: (context, ref, _) {
+                final hasPin = ref.watch(appLockProvider).valueOrNull != null;
+                return Card(
+                  child: SwitchListTile(
+                    title: const Text('Bloquear o app com PIN'),
+                    subtitle: Text(
+                      hasPin
+                          ? 'Ativado neste dispositivo.'
+                          : 'Pede um PIN de 4 dígitos toda vez que o app é aberto.',
+                      style: AppTypography.caption,
+                    ),
+                    value: hasPin,
+                    onChanged: (value) => unawaited(value ? _enablePinLock() : _disablePinLock()),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: AppSpacing.lg),
             Row(

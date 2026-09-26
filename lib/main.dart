@@ -5,9 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'core/config/supabase_config.dart';
+import 'core/providers/app_lock_provider.dart';
 import 'core/providers/theme_provider.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'features/lock/screens/app_lock_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,6 +42,15 @@ class FinancasCasalApp extends ConsumerWidget {
       darkTheme: AppTheme.dark(),
       themeMode: themeMode,
       routerConfig: AppRouter.router,
+      builder: (context, child) {
+        final lockState = ref.watch(appLockProvider);
+        final unlocked = ref.watch(appUnlockedProvider);
+        final pinHash = lockState.valueOrNull;
+        if (pinHash != null && !unlocked) {
+          return const AppLockScreen();
+        }
+        return child ?? const SizedBox.shrink();
+      },
     );
   }
 }

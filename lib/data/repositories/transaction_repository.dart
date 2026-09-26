@@ -48,6 +48,23 @@ class TransactionRepository {
     return rows.map((row) => Transaction.fromJson(row)).toList();
   }
 
+  /// Busca por descrição em todo o histórico do household (sem recorte de
+  /// período) — usada quando a busca da Home tem texto, já que aí faz mais
+  /// sentido achar algo de qualquer mês do que só o selecionado.
+  Future<List<Transaction>> searchByDescription({
+    required String householdId,
+    required String query,
+  }) async {
+    final rows = await _client
+        .from('transactions')
+        .select()
+        .eq('household_id', householdId)
+        .ilike('description', '%$query%')
+        .order('date', ascending: false)
+        .limit(200);
+    return rows.map((row) => Transaction.fromJson(row)).toList();
+  }
+
   Future<Transaction> create(Transaction transaction) async {
     final row = await _client
         .from('transactions')

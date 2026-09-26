@@ -334,10 +334,11 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
 
     setState(() => _isDeleting = true);
     try {
-      await ref.read(transactionRepositoryProvider).delete(widget.existing!.id);
+      final deleted = widget.existing!;
+      await ref.read(transactionRepositoryProvider).delete(deleted.id);
       ref.invalidate(transactionsProvider);
       Haptics.success();
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) Navigator.of(context).pop(deleted);
     } catch (_) {
       Haptics.warning();
       setState(() => _errorMessage = 'Não foi possível excluir. Tente novamente.');

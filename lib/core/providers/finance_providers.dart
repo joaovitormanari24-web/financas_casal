@@ -106,16 +106,33 @@ final transactionCategoryFilterProvider = StateProvider<String?>((ref) => null);
 /// Filtro opcional por forma de pagamento na lista de lançamentos.
 final transactionPaymentMethodFilterProvider = StateProvider<PaymentMethod?>((ref) => null);
 
-/// [transactionsProvider] já filtrado pela busca/categoria/forma de
-/// pagamento selecionados — o que a Home efetivamente lista.
+/// Resultado da busca por descrição em TODO o histórico (sem recorte de
+/// período) — só dispara quando há texto no campo de busca.
+final globalSearchResultsProvider = FutureProvider<List<Transaction>>((ref) async {
+  final query = ref.watch(transactionSearchQueryProvider).trim();
+  if (query.isEmpty) return const [];
+  final household = await ref.watch(currentHouseholdProvider.future);
+  if (household == null) return const [];
+  return ref.watch(transactionRepositoryProvider).searchByDescription(
+        householdId: household.id,
+        query: query,
+      );
+});
+
+/// Fonte efetiva da lista da Home: [transactionsProvider] (período
+/// selecionado) normalmente, ou [globalSearchResultsProvider] (todo o
+/// histórico) quando há texto de busca — sempre com os filtros de
+/// categoria/forma de pagamento aplicados por cima.
 final filteredTransactionsProvider = Provider<List<Transaction>>((ref) {
-  final transactions = ref.watch(transactionsProvider).valueOrNull ?? const [];
-  final query = ref.watch(transactionSearchQueryProvider).trim().toLowerCase();
+  final query = ref.watch(transactionSearchQueryProvider).trim();
   final categoryId = ref.watch(transactionCategoryFilterProvider);
   final paymentMethod = ref.watch(transactionPaymentMethodFilterProvider);
 
+  final transactions = query.isEmpty
+      ? ref.watch(transactionsProvider).valueOrNull ?? const []
+      : ref.watch(globalSearchResultsProvider).valueOrNull ?? const [];
+
   return transactions.where((t) {
-    if (query.isNotEmpty && !t.description.toLowerCase().contains(query)) return false;
     if (categoryId != null && t.categoryId != categoryId) return false;
     if (paymentMethod != null && t.paymentMethod != paymentMethod) return false;
     return true;
