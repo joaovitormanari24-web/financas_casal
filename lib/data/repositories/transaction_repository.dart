@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/transaction.dart';
 
@@ -5,6 +7,7 @@ class TransactionRepository {
   TransactionRepository(this._client);
 
   final SupabaseClient _client;
+  static const _receiptsBucket = 'receipts';
 
   /// Lançamentos do household num mês de referência (qualquer dia do mês).
   Future<List<Transaction>> fetchForMonth({
@@ -66,6 +69,35 @@ class TransactionRepository {
 
   Future<void> delete(String id) async {
     await _client.from('transactions').delete().eq('id', id);
+  }
+
+  /// Envia a foto do comprovante e devolve o caminho salvo no bucket
+  /// (não uma URL — o bucket é privado, então exibir exige signed URL).
+  Future<String> uploadReceipt({
+    required String householdId,
+    required String transactionId,
+    required Uint8List bytes,
+    required String fileExt,
+  }) async {
+    final path = '$householdId/$transactionId.$fileExt';
+    await _client.storage.from(_receiptsBucket).uploadBinary(
+          path,
+          bytes,
+          fileOptions: const FileOptions(upsert: true),
+        );
+    return path;
+  }
+
+  Future<void> deleteReceipt(String path) async {
+    await _client.storage.from(_receiptsBucket).remove([path]);
+  }
+
+  Future<String> getReceiptSignedUrl(String path) async {
+    return _client.storage.from(_receiptsBucket).createSignedUrl(path, 3600);
+  }
+
+  Future<void> setReceiptPath(String transactionId, String? path) async {
+    await _client.from('transactions').update({'receipt_path': path}).eq('id', transactionId);
   }
 
   /// Cria o plano de parcelamento e já lança todas as parcelas futuras —

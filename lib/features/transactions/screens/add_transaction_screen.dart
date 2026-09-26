@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/providers/app_providers.dart';
@@ -81,10 +83,21 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   bool _hasAmountChange = false;
   DateTime? _amountChangeDate;
 
+  // Comprovante.
+  XFile? _pickedReceipt;
+  Uint8List? _pickedReceiptBytes;
+  String? _existingReceiptPath;
+  String? _existingReceiptSignedUrl;
+  bool _removeExistingReceipt = false;
+
   @override
   void initState() {
     super.initState();
     final existing = widget.existing;
+    _existingReceiptPath = existing?.receiptPath;
+    if (_existingReceiptPath != null) {
+      unawaited(_loadExistingReceiptPreview());
+    }
     _amountController = TextEditingController(
       text: existing == null ? '' : existing.amount.toStringAsFixed(2).replaceAll('.', ','),
     );
@@ -105,6 +118,73 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     _descriptionController.dispose();
     _newAmountController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadExistingReceiptPreview() async {
+    try {
+      final url = await ref
+          .read(transactionRepositoryProvider)
+          .getReceiptSignedUrl(_existingReceiptPath!);
+      if (mounted) setState(() => _existingReceiptSignedUrl = url);
+    } catch (_) {
+      // Sem preview — o botão de remover/trocar continua funcionando.
+    }
+  }
+
+  Future<void> _pickReceipt() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Tirar foto'),
+              onTap: () => Navigator.of(context).pop(ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Escolher da galeria'),
+              onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+
+    final file = await ImagePicker().pickImage(
+      source: source,
+      imageQuality: 70,
+      maxWidth: 1600,
+    );
+    if (file == null) return;
+
+    final bytes = await file.readAsBytes();
+    setState(() {
+      _pickedReceipt = file;
+      _pickedReceiptBytes = bytes;
+      _removeExistingReceipt = false;
+    });
+  }
+
+  Future<void> _syncReceipt(String transactionId, String householdId) async {
+    final repo = ref.read(transactionRepositoryProvider);
+    if (_pickedReceiptBytes != null) {
+      final name = _pickedReceipt!.name;
+      final ext = name.contains('.') ? name.split('.').last.toLowerCase() : 'jpg';
+      final path = await repo.uploadReceipt(
+        householdId: householdId,
+        transactionId: transactionId,
+        bytes: _pickedReceiptBytes!,
+        fileExt: ext,
+      );
+      await repo.setReceiptPath(transactionId, path);
+    } else if (_removeExistingReceipt && _existingReceiptPath != null) {
+      await repo.deleteReceipt(_existingReceiptPath!);
+      await repo.setReceiptPath(transactionId, null);
+    }
   }
 
   double? _parseAmount(String raw) {
@@ -160,6 +240,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           accountId: _accountId,
         );
         await ref.read(transactionRepositoryProvider).update(widget.existing!.id, transaction);
+        await _syncReceipt(widget.existing!.id, household.id);
         ref.invalidate(transactionsProvider);
       } else {
         switch (_repeatMode) {
@@ -176,7 +257,9 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
               paymentMethod: _paymentMethod,
               accountId: _accountId,
             );
-            await ref.read(transactionRepositoryProvider).create(transaction);
+            final created =
+                await ref.read(transactionRepositoryProvider).create(transaction);
+            await _syncReceipt(created.id, household.id);
             ref.invalidate(transactionsProvider);
           case TxRepeatMode.installments:
             await ref.read(transactionRepositoryProvider).createInstallmentPurchase(
@@ -488,6 +571,12 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                   },
                   orElse: () => const SizedBox.shrink(),
                 ),
+                if (_repeatMode == TxRepeatMode.once || widget.isEditing) ...[
+                  Text('Comprovante (opcional)', style: AppTypography.captionEmphasis),
+                  const SizedBox(height: AppSpacing.xs),
+                  _buildReceiptSection(),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
                 ..._buildTxRepeatModeFields(),
                 if (_errorMessage != null) ...[
                   const SizedBox(height: AppSpacing.sm),
@@ -514,6 +603,39 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildReceiptSection() {
+    if (_pickedReceiptBytes != null) {
+      return _ReceiptPreview(
+        imageProvider: MemoryImage(_pickedReceiptBytes!),
+        onRemove: () => setState(() {
+          _pickedReceipt = null;
+          _pickedReceiptBytes = null;
+        }),
+      );
+    }
+    if (_existingReceiptPath != null && !_removeExistingReceipt) {
+      if (_existingReceiptSignedUrl == null) {
+        return const Padding(
+          padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        );
+      }
+      return _ReceiptPreview(
+        imageProvider: NetworkImage(_existingReceiptSignedUrl!),
+        onRemove: () => setState(() => _removeExistingReceipt = true),
+      );
+    }
+    return OutlinedButton.icon(
+      onPressed: _pickReceipt,
+      icon: const Icon(Icons.attach_file_rounded, size: 18),
+      label: const Text('Adicionar comprovante'),
     );
   }
 
@@ -665,6 +787,39 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           ],
         ];
     }
+  }
+}
+
+/// Miniatura do comprovante com toque pra ampliar e botão de remover.
+class _ReceiptPreview extends StatelessWidget {
+  const _ReceiptPreview({required this.imageProvider, required this.onRemove});
+
+  final ImageProvider imageProvider;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        GestureDetector(
+          onTap: () => showDialog<void>(
+            context: context,
+            builder: (context) => Dialog(
+              child: InteractiveViewer(child: Image(image: imageProvider)),
+            ),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            child: Image(image: imageProvider, width: 72, height: 72, fit: BoxFit.cover),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        IconButton(
+          icon: const Icon(Icons.delete_outline_rounded),
+          onPressed: onRemove,
+        ),
+      ],
+    );
   }
 }
 

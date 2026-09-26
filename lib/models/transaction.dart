@@ -20,6 +20,7 @@ class Transaction extends Equatable {
     this.installmentPlanId,
     this.installmentNumber,
     this.installmentTotal,
+    this.receiptPath,
   });
 
   final String id;
@@ -45,7 +46,12 @@ class Transaction extends Equatable {
   final int? installmentNumber;
   final int? installmentTotal;
 
+  /// Caminho do comprovante no bucket "receipts" (Storage), ou nulo se não
+  /// houver um anexado. Não é uma URL — precisa gerar signed URL pra exibir.
+  final String? receiptPath;
+
   bool get isInstallment => installmentPlanId != null;
+  bool get hasReceipt => receiptPath != null;
   bool get isRecurring => recurringTransactionId != null;
 
   factory Transaction.fromJson(Map<String, dynamic> json) => Transaction(
@@ -65,6 +71,7 @@ class Transaction extends Equatable {
         installmentPlanId: json['installment_plan_id'] as String?,
         installmentNumber: json['installment_number'] as int?,
         installmentTotal: json['installment_total'] as int?,
+        receiptPath: json['receipt_path'] as String?,
       );
 
   Map<String, dynamic> toInsertJson() => {
@@ -96,6 +103,7 @@ class Transaction extends Equatable {
         date,
         paidByMemberId,
         paymentMethod,
+        receiptPath,
       ];
 }
 

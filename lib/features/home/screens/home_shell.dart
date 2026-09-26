@@ -822,7 +822,25 @@ class _TransactionTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(transaction.description, style: AppTypography.body),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        transaction.description,
+                        style: AppTypography.body,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (transaction.hasReceipt) ...[
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.attach_file_rounded,
+                        size: 14,
+                        color: palette.textTertiary,
+                      ),
+                    ],
+                  ],
+                ),
                 Text(
                   paidByLabel == null
                       ? (categoryName ?? 'Sem categoria')

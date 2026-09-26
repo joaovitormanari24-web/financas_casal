@@ -47,6 +47,9 @@ dependencies:
   # Ícones
   cupertino_icons: ^1.0.8
 
+  # Comprovantes (foto/galeria)
+  image_picker: ^1.1.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
