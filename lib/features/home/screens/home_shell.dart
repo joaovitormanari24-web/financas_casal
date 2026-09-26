@@ -7,12 +7,12 @@ import 'package:intl/intl.dart';
 
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/finance_providers.dart';
-import '../../../core/providers/theme_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../features/transactions/screens/add_transaction_screen.dart';
 import '../../budgets/screens/budgets_screen.dart';
+import '../../notifications/screens/notifications_screen.dart';
 import '../../settings/screens/settings_screen.dart';
 import '../../simulator/screens/simulator_screen.dart';
 import '../../../models/enums.dart';
@@ -109,7 +109,7 @@ class HomeShell extends ConsumerWidget {
               ),
             ),
           ),
-          const _ThemeModeButton(),
+          const _NotificationsButton(),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Sair',
@@ -168,46 +168,25 @@ class HomeShell extends ConsumerWidget {
   }
 }
 
-class _ThemeModeButton extends ConsumerWidget {
-  const _ThemeModeButton();
-
-  IconData _iconFor(ThemeMode mode) => switch (mode) {
-        ThemeMode.light => Icons.light_mode_outlined,
-        ThemeMode.dark => Icons.dark_mode_outlined,
-        ThemeMode.system => Icons.contrast_rounded,
-      };
-
-  String _labelFor(ThemeMode mode) => switch (mode) {
-        ThemeMode.light => 'Claro',
-        ThemeMode.dark => 'Escuro',
-        ThemeMode.system => 'Automático',
-      };
+class _NotificationsButton extends ConsumerWidget {
+  const _NotificationsButton();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final themeMode = ref.watch(themeModeProvider);
+    final unreadCount = ref.watch(unreadNotificationsCountProvider);
 
-    return PopupMenuButton<ThemeMode>(
-      tooltip: 'Tema',
-      icon: Icon(_iconFor(themeMode)),
-      onSelected: (mode) =>
-          unawaited(ref.read(themeModeProvider.notifier).setThemeMode(mode)),
-      itemBuilder: (context) => ThemeMode.values.map((mode) {
-        return PopupMenuItem(
-          value: mode,
-          child: Row(
-            children: [
-              Icon(_iconFor(mode), size: 18),
-              const SizedBox(width: AppSpacing.sm),
-              Text(_labelFor(mode)),
-              if (mode == themeMode) ...[
-                const Spacer(),
-                const Icon(Icons.check, size: 18),
-              ],
-            ],
-          ),
-        );
-      }).toList(),
+    return IconButton(
+      tooltip: 'Notificações',
+      icon: Badge(
+        isLabelVisible: unreadCount > 0,
+        label: Text('$unreadCount'),
+        child: const Icon(Icons.notifications_outlined),
+      ),
+      onPressed: () => unawaited(
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+        ),
+      ),
     );
   }
 }

@@ -45,24 +45,32 @@ class NewCategoryResult {
   final String colorHex;
 }
 
-Future<NewCategoryResult?> showAddCategoryDialog(BuildContext context) {
+Future<NewCategoryResult?> showAddCategoryDialog(
+  BuildContext context, {
+  NewCategoryResult? existing,
+}) {
   return showDialog<NewCategoryResult>(
     context: context,
-    builder: (context) => const _AddCategoryDialog(),
+    builder: (context) => _AddCategoryDialog(existing: existing),
   );
 }
 
 class _AddCategoryDialog extends StatefulWidget {
-  const _AddCategoryDialog();
+  const _AddCategoryDialog({this.existing});
+
+  final NewCategoryResult? existing;
 
   @override
   State<_AddCategoryDialog> createState() => _AddCategoryDialogState();
 }
 
 class _AddCategoryDialogState extends State<_AddCategoryDialog> {
-  final _nameController = TextEditingController();
-  String _icon = _iconChoices.first;
-  String _colorHex = _colorChoices.first;
+  late final TextEditingController _nameController =
+      TextEditingController(text: widget.existing?.name ?? '');
+  late String _icon = widget.existing?.icon ?? _iconChoices.first;
+  late String _colorHex = widget.existing?.colorHex ?? _colorChoices.first;
+
+  bool get _isEditing => widget.existing != null;
 
   @override
   void dispose() {
@@ -75,7 +83,7 @@ class _AddCategoryDialogState extends State<_AddCategoryDialog> {
     final color = colorFromHex(_colorHex);
 
     return AlertDialog(
-      title: const Text('Nova categoria'),
+      title: Text(_isEditing ? 'Editar categoria' : 'Nova categoria'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -158,7 +166,7 @@ class _AddCategoryDialogState extends State<_AddCategoryDialog> {
                       colorHex: _colorHex,
                     ),
                   ),
-          child: const Text('Criar'),
+          child: Text(_isEditing ? 'Salvar' : 'Criar'),
         ),
       ],
     );

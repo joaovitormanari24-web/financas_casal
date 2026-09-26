@@ -62,6 +62,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   late PaymentMethod _paymentMethod;
   String? _categoryId;
   String? _paidByMemberId;
+  String? _accountId;
   late DateTime _date;
   bool _isSubmitting = false;
   bool _isDeleting = false;
@@ -92,6 +93,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     _paymentMethod = existing?.paymentMethod ?? PaymentMethod.pix;
     _categoryId = existing?.categoryId;
     _paidByMemberId = existing?.paidByMemberId;
+    _accountId = existing?.accountId;
     _date = existing?.date ?? DateTime.now();
     _repeatMode = widget.isEditing ? TxRepeatMode.once : widget.initialTxRepeatMode;
     if (_repeatMode == TxRepeatMode.recurring) _type = TransactionType.expense;
@@ -155,6 +157,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           date: _date,
           paidByMemberId: _paidByMemberId!,
           paymentMethod: _paymentMethod,
+          accountId: _accountId,
         );
         await ref.read(transactionRepositoryProvider).update(widget.existing!.id, transaction);
         ref.invalidate(transactionsProvider);
@@ -171,6 +174,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
               date: _date,
               paidByMemberId: _paidByMemberId!,
               paymentMethod: _paymentMethod,
+              accountId: _accountId,
             );
             await ref.read(transactionRepositoryProvider).create(transaction);
             ref.invalidate(transactionsProvider);
@@ -305,6 +309,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     final membersAsync = ref.watch(householdMembersProvider);
     final currentMemberAsync = ref.watch(currentMemberProvider);
     final householdId = ref.watch(currentHouseholdProvider).valueOrNull?.id;
+    final accountsAsync = ref.watch(accountsProvider);
 
     currentMemberAsync.whenData((member) {
       if (member != null && _paidByMemberId == null) {
@@ -446,6 +451,34 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                               selected: member.id == _paidByMemberId,
                               onSelected: (_) =>
                                   setState(() => _paidByMemberId = member.id),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                      ],
+                    );
+                  },
+                  orElse: () => const SizedBox.shrink(),
+                ),
+                accountsAsync.maybeWhen(
+                  data: (accounts) {
+                    if (accounts.isEmpty) return const SizedBox.shrink();
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Conta (opcional)', style: AppTypography.captionEmphasis),
+                        const SizedBox(height: AppSpacing.xs),
+                        Wrap(
+                          spacing: AppSpacing.xs,
+                          runSpacing: AppSpacing.xs,
+                          children: accounts.map((account) {
+                            final selected = account.id == _accountId;
+                            return ChoiceChip(
+                              label: Text(account.name),
+                              selected: selected,
+                              onSelected: (isSelected) => setState(
+                                () => _accountId = isSelected ? account.id : null,
+                              ),
                             );
                           }).toList(),
                         ),

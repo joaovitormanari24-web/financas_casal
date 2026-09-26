@@ -27,6 +27,13 @@ class Account extends Equatable {
         externalSource: json['external_source'] as String?,
       );
 
+  Map<String, dynamic> toInsertJson() => {
+        'household_id': householdId,
+        'name': name,
+        'owner_member_id': ownerMemberId,
+        'external_source': externalSource,
+      };
+
   @override
   List<Object?> get props => [id, householdId, name, ownerMemberId];
 }

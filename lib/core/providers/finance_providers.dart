@@ -1,12 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../data/repositories/account_repository.dart';
 import '../../data/repositories/budget_repository.dart';
 import '../../data/repositories/category_repository.dart';
 import '../../data/repositories/financial_simulation_repository.dart';
 import '../../data/repositories/goal_repository.dart';
+import '../../data/repositories/notification_repository.dart';
 import '../../data/repositories/recurring_transaction_repository.dart';
 import '../../data/repositories/transaction_repository.dart';
+import '../../models/accounts.dart';
+import '../../models/app_notification.dart';
 import '../../models/budget.dart';
 import '../../models/category.dart';
 import '../../models/enums.dart';
@@ -174,6 +178,31 @@ final financialSimulationRepositoryProvider = Provider<FinancialSimulationReposi
   return FinancialSimulationRepository(ref.watch(supabaseClientProvider));
 });
 
+final accountRepositoryProvider = Provider<AccountRepository>((ref) {
+  return AccountRepository(ref.watch(supabaseClientProvider));
+});
+
+final accountsProvider = FutureProvider<List<Account>>((ref) async {
+  final household = await ref.watch(currentHouseholdProvider.future);
+  if (household == null) return const [];
+  return ref.watch(accountRepositoryProvider).fetchForHousehold(household.id);
+});
+
+final notificationRepositoryProvider = Provider<NotificationRepository>((ref) {
+  return NotificationRepository(ref.watch(supabaseClientProvider));
+});
+
+final notificationsProvider = FutureProvider<List<AppNotification>>((ref) async {
+  final household = await ref.watch(currentHouseholdProvider.future);
+  if (household == null) return const [];
+  return ref.watch(notificationRepositoryProvider).fetchForHousehold(household.id);
+});
+
+final unreadNotificationsCountProvider = Provider<int>((ref) {
+  final notifications = ref.watch(notificationsProvider).valueOrNull ?? const [];
+  return notifications.where((n) => !n.isRead).length;
+});
+
 /// Totais de um mês pro gráfico de evolução — independente do mês
 /// selecionado na Home, sempre os últimos 6 meses a partir de hoje.
 class MonthlyTotals {
@@ -257,6 +286,17 @@ final realtimeSyncProvider = Provider<void>((ref) {
           value: household.id,
         ),
         callback: (_) => ref.invalidate(goalsProvider),
+      )
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'notifications',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'household_id',
+          value: household.id,
+        ),
+        callback: (_) => ref.invalidate(notificationsProvider),
       )
       .subscribe();
 

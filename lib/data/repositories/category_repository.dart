@@ -37,6 +37,19 @@ class CategoryRepository {
     return Category.fromJson(row);
   }
 
+  Future<void> update({
+    required String id,
+    required String name,
+    required String icon,
+    required String colorHex,
+  }) async {
+    await _client.from('categories').update({
+      'name': name,
+      'icon': icon,
+      'color_hex': colorHex,
+    }).eq('id', id);
+  }
+
   Future<void> delete(String id) async {
     await _client.from('categories').delete().eq('id', id);
   }
