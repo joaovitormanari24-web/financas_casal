@@ -150,7 +150,7 @@ class _ThemeModeButton extends ConsumerWidget {
   IconData _iconFor(ThemeMode mode) => switch (mode) {
         ThemeMode.light => Icons.light_mode_outlined,
         ThemeMode.dark => Icons.dark_mode_outlined,
-        ThemeMode.system => Icons.brightness_auto_outlined,
+        ThemeMode.system => Icons.contrast_rounded,
       };
 
   String _labelFor(ThemeMode mode) => switch (mode) {
