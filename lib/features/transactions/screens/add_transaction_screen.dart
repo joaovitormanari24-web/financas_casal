@@ -420,6 +420,21 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     }
   }
 
+  /// "Débito"/"Crédito" só fazem sentido como forma de pagar uma despesa —
+  /// numa receita, é sempre "como o dinheiro entrou" (Pix, dinheiro,
+  /// transferência, boleto recebido), nunca cartão.
+  List<PaymentMethod> get _availablePaymentMethods {
+    if (_type == TransactionType.income) {
+      return const [
+        PaymentMethod.pix,
+        PaymentMethod.transfer,
+        PaymentMethod.cash,
+        PaymentMethod.boleto,
+      ];
+    }
+    return PaymentMethod.values;
+  }
+
   @override
   Widget build(BuildContext context) {
     final categoriesAsync = ref.watch(categoriesProvider);
@@ -494,8 +509,13 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                       ButtonSegment(value: TransactionType.income, label: Text('Receita')),
                     ],
                     selected: {_type},
-                    onSelectionChanged: (selection) =>
-                        setState(() => _type = selection.first),
+                    onSelectionChanged: (selection) => setState(() {
+                      _type = selection.first;
+                      final available = _availablePaymentMethods;
+                      if (!available.contains(_paymentMethod)) {
+                        _paymentMethod = available.first;
+                      }
+                    }),
                   ),
                   const SizedBox(height: AppSpacing.md),
                 ],
@@ -542,7 +562,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                 Wrap(
                   spacing: AppSpacing.xs,
                   runSpacing: AppSpacing.xs,
-                  children: PaymentMethod.values.map((method) {
+                  children: _availablePaymentMethods.map((method) {
                     return ChoiceChip(
                       label: Text(method.label),
                       avatar: Icon(paymentMethodIconData(method), size: 16),
