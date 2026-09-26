@@ -85,6 +85,10 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   bool _hasReminder = false;
   int _reminderDaysBefore = 3;
 
+  // Pago/pendente — só relevante pra lançamento avulso (once) ou edição.
+  late TransactionStatus _status;
+  bool _statusManuallySet = false;
+
   // Comprovante.
   XFile? _pickedReceipt;
   Uint8List? _pickedReceiptBytes;
@@ -112,6 +116,17 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     _date = existing?.date ?? DateTime.now();
     _repeatMode = widget.isEditing ? TxRepeatMode.once : widget.initialTxRepeatMode;
     if (_repeatMode == TxRepeatMode.recurring) _type = TransactionType.expense;
+    _status = existing?.status ?? _defaultStatusForDate(_date);
+  }
+
+  bool _isFutureDate(DateTime date) {
+    final today = DateTime.now();
+    final todayOnly = DateTime(today.year, today.month, today.day);
+    return DateTime(date.year, date.month, date.day).isAfter(todayOnly);
+  }
+
+  TransactionStatus _defaultStatusForDate(DateTime date) {
+    return _isFutureDate(date) ? TransactionStatus.pending : TransactionStatus.paid;
   }
 
   @override
@@ -357,7 +372,11 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
-    if (picked != null) setState(() => _date = picked);
+    if (picked == null) return;
+    setState(() {
+      _date = picked;
+      if (!_statusManuallySet) _status = _defaultStatusForDate(picked);
+    });
   }
 
   Future<void> _pickEndDate() async {

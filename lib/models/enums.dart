@@ -45,6 +45,20 @@ extension PaymentMethodX on PaymentMethod {
       };
 }
 
+enum TransactionStatus { paid, pending }
+
+extension TransactionStatusX on TransactionStatus {
+  String get dbValue => switch (this) {
+        TransactionStatus.paid => 'paid',
+        TransactionStatus.pending => 'pending',
+      };
+
+  static TransactionStatus fromDb(String value) => switch (value) {
+        'pending' => TransactionStatus.pending,
+        _ => TransactionStatus.paid,
+      };
+}
+
 enum RecurrenceFrequency { weekly, monthly, annual }
 
 extension RecurrenceFrequencyX on RecurrenceFrequency {

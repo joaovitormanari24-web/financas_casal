@@ -21,6 +21,7 @@ class Transaction extends Equatable {
     this.installmentNumber,
     this.installmentTotal,
     this.receiptPath,
+    this.status = TransactionStatus.paid,
   });
 
   final String id;
@@ -50,9 +51,22 @@ class Transaction extends Equatable {
   /// houver um anexado. Não é uma URL — precisa gerar signed URL pra exibir.
   final String? receiptPath;
 
+  /// Pago (já saiu/entrou da conta) ou pendente (agendado/a vencer — ainda
+  /// não afeta o saldo real da conta).
+  final TransactionStatus status;
+
   bool get isInstallment => installmentPlanId != null;
   bool get hasReceipt => receiptPath != null;
   bool get isRecurring => recurringTransactionId != null;
+  bool get isPending => status == TransactionStatus.pending;
+
+  /// Pendente com vencimento já passado.
+  bool get isOverdue {
+    if (!isPending) return false;
+    final today = DateTime.now();
+    final todayDateOnly = DateTime(today.year, today.month, today.day);
+    return date.isBefore(todayDateOnly);
+  }
 
   factory Transaction.fromJson(Map<String, dynamic> json) => Transaction(
         id: json['id'] as String,
@@ -72,6 +86,7 @@ class Transaction extends Equatable {
         installmentNumber: json['installment_number'] as int?,
         installmentTotal: json['installment_total'] as int?,
         receiptPath: json['receipt_path'] as String?,
+        status: TransactionStatusX.fromDb(json['status'] as String? ?? 'paid'),
       );
 
   Map<String, dynamic> toInsertJson() => {
@@ -90,6 +105,7 @@ class Transaction extends Equatable {
         'installment_plan_id': installmentPlanId,
         'installment_number': installmentNumber,
         'installment_total': installmentTotal,
+        'status': status.dbValue,
       };
 
   @override
@@ -104,6 +120,7 @@ class Transaction extends Equatable {
         paidByMemberId,
         paymentMethod,
         receiptPath,
+        status,
       ];
 }
 

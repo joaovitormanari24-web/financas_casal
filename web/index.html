@@ -172,7 +172,17 @@
       };
     })();
   </script>
-  <script src="https://cdn.pluggy.ai/pluggy-connect/v2.8.2/pluggy-connect.js" defer></script>
+  <!--
+    crossorigin é obrigatório aqui: o app usa Cross-Origin-Embedder-Policy
+    require-corp (exigido pelo CanvasKit do Flutter web), que bloqueia
+    silenciosamente qualquer script de terceiro carregado sem esse
+    atributo — foi exatamente isso que causava "widget_not_loaded".
+  -->
+  <script
+    src="https://cdn.pluggy.ai/pluggy-connect/v2.8.2/pluggy-connect.js"
+    crossorigin="anonymous"
+    defer
+  ></script>
   <script>
     // Ponte pro widget Pluggy Connect (conectar um banco via Open Finance).
     // O script acima carrega em paralelo; só acessamos window.PluggyConnect

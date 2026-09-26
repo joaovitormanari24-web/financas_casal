@@ -88,6 +88,16 @@ class TransactionRepository {
     await _client.from('transactions').delete().eq('id', id);
   }
 
+  /// Confirma que um lançamento pendente já foi pago — a partir daí ele
+  /// passa a contar no saldo real da conta.
+  Future<void> markPaid(String id) async {
+    await _client.from('transactions').update({'status': 'paid'}).eq('id', id);
+  }
+
+  Future<void> markPending(String id) async {
+    await _client.from('transactions').update({'status': 'pending'}).eq('id', id);
+  }
+
   /// Envia a foto do comprovante e devolve o caminho salvo no bucket
   /// (não uma URL — o bucket é privado, então exibir exige signed URL).
   Future<String> uploadReceipt({
@@ -145,19 +155,25 @@ class TransactionRepository {
         .single();
     final planId = planRow['id'] as String;
 
+    final today = DateTime.now();
+    final todayDateOnly = DateTime(today.year, today.month, today.day);
+
     final rows = List.generate(installmentCount, (i) {
+      final dueDate = _addMonthsClamped(firstDueDate, i);
       return {
         'household_id': householdId,
         'type': 'expense',
         'amount': installmentAmount,
         'description': '$description (${i + 1}/$installmentCount)',
         'category_id': categoryId,
-        'date': _addMonthsClamped(firstDueDate, i).toIso8601String(),
+        'date': dueDate.toIso8601String(),
         'paid_by_member_id': paidByMemberId,
         'payment_method': paymentMethod,
         'installment_plan_id': planId,
         'installment_number': i + 1,
         'installment_total': installmentCount,
+        // Parcela futura nasce pendente — ainda não saiu da conta.
+        'status': dueDate.isAfter(todayDateOnly) ? 'pending' : 'paid',
       };
     });
 
