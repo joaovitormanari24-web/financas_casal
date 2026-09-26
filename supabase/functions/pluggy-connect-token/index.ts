@@ -25,13 +25,18 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 async function getPluggyApiKey(): Promise<string> {
+  if (!PLUGGY_CLIENT_ID || !PLUGGY_CLIENT_SECRET) {
+    throw new Error("PLUGGY_CLIENT_ID/PLUGGY_CLIENT_SECRET not configured");
+  }
   const res = await fetch("https://api.pluggy.ai/auth", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ clientId: PLUGGY_CLIENT_ID, clientSecret: PLUGGY_CLIENT_SECRET }),
   });
   if (!res.ok) {
-    throw new Error(`pluggy auth failed: ${res.status} ${await res.text()}`);
+    const details = await res.text();
+    console.error("pluggy auth failed", res.status, details);
+    throw new Error(`pluggy auth failed: ${res.status} ${details}`);
   }
   const data = await res.json();
   return data.apiKey as string;
@@ -63,14 +68,14 @@ Deno.serve(async (req) => {
       body: JSON.stringify({ clientUserId: userData.user.id }),
     });
     if (!res.ok) {
-      return jsonResponse(
-        { error: "pluggy_connect_token_failed", details: await res.text() },
-        502,
-      );
+      const details = await res.text();
+      console.error("pluggy connect_token failed", res.status, details);
+      return jsonResponse({ error: "pluggy_connect_token_failed", details }, 502);
     }
     const data = await res.json();
     return jsonResponse({ connectToken: data.accessToken });
   } catch (err) {
+    console.error("pluggy-connect-token error", err);
     return jsonResponse({ error: String(err) }, 500);
   }
 });

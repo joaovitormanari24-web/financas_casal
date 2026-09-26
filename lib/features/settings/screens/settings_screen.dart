@@ -551,11 +551,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           );
       _invalidateAfterBankSync();
       Haptics.success();
-    } catch (_) {
+    } catch (e) {
       Haptics.warning();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Não foi possível conectar o banco. Tente novamente.')),
+          SnackBar(content: Text('Erro ao conectar: $e')),
         );
       }
     } finally {
