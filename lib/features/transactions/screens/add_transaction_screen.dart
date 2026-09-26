@@ -82,6 +82,8 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   DateTime? _endDate;
   bool _hasAmountChange = false;
   DateTime? _amountChangeDate;
+  bool _hasReminder = false;
+  int _reminderDaysBefore = 3;
 
   // Comprovante.
   XFile? _pickedReceipt;
@@ -286,6 +288,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
               paymentMethod: _paymentMethod,
               paidByMemberId: _paidByMemberId,
               endDate: _hasEndDate ? _endDate : null,
+              reminderDaysBefore: _hasReminder ? _reminderDaysBefore : null,
             );
             final recurringRepo = ref.read(recurringTransactionRepositoryProvider);
             final created = await recurringRepo.create(recurring);
@@ -784,6 +787,32 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                       : 'A partir de ${DateFormat('dd/MM/yyyy', 'pt_BR').format(_amountChangeDate!)}',
                 ),
               ),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.xs),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text('Lembrete antes do vencimento?', style: AppTypography.captionEmphasis),
+            subtitle: Text(
+              _hasReminder
+                  ? 'Avisa $_reminderDaysBefore dia(s) antes, além do dia do lançamento'
+                  : 'Só avisa no dia em que for lançado',
+              style: AppTypography.caption,
+            ),
+            value: _hasReminder,
+            onChanged: (value) => setState(() => _hasReminder = value),
+          ),
+          if (_hasReminder) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Wrap(
+              spacing: AppSpacing.xs,
+              children: [1, 2, 3, 5, 7].map((days) {
+                return ChoiceChip(
+                  label: Text('$days dia${days > 1 ? 's' : ''}'),
+                  selected: days == _reminderDaysBefore,
+                  onSelected: (_) => setState(() => _reminderDaysBefore = days),
+                );
+              }).toList(),
             ),
           ],
         ];

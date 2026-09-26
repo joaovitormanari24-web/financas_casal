@@ -160,6 +160,7 @@ class RecurringTransaction extends Equatable {
     required this.paymentMethod,
     this.paidByMemberId,
     this.endDate,
+    this.reminderDaysBefore,
   });
 
   final String id;
@@ -183,6 +184,10 @@ class RecurringTransaction extends Equatable {
   /// tempo indeterminado.
   final DateTime? endDate;
 
+  /// Avisa N dias antes do vencimento, além do aviso no dia do lançamento.
+  /// Nulo = sem lembrete extra.
+  final int? reminderDaysBefore;
+
   factory RecurringTransaction.fromJson(Map<String, dynamic> json) =>
       RecurringTransaction(
         id: json['id'] as String,
@@ -196,6 +201,7 @@ class RecurringTransaction extends Equatable {
         paymentMethod: PaymentMethodX.fromDb(json['payment_method'] as String),
         paidByMemberId: json['paid_by_member_id'] as String?,
         endDate: json['end_date'] == null ? null : DateTime.parse(json['end_date'] as String),
+        reminderDaysBefore: json['reminder_days_before'] as int?,
       );
 
   Map<String, dynamic> toInsertJson() => {
@@ -209,6 +215,7 @@ class RecurringTransaction extends Equatable {
         'payment_method': paymentMethod.dbValue,
         'paid_by_member_id': paidByMemberId,
         'end_date': endDate?.toIso8601String(),
+        'reminder_days_before': reminderDaysBefore,
       };
 
   @override

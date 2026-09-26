@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/providers/app_lock_provider.dart';
 import '../../../core/providers/app_providers.dart';
@@ -14,8 +15,10 @@ import '../../../models/accounts.dart';
 import '../../../models/category.dart';
 import '../../../shared/services/push_notification_service.dart';
 import '../../../shared/utils/category_icons.dart';
+import '../../../shared/utils/currency_formatter.dart';
 import '../../../shared/utils/haptics.dart';
 import '../../transactions/screens/add_category_dialog.dart';
+import '../../accounts/screens/account_detail_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -29,6 +32,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _pushService = const PushNotificationService();
   bool _isSavingName = false;
   bool _isLeaving = false;
+  bool _isDeletingAccount = false;
   String? _prefilledFrom;
 
   bool _pushSupported = true;
@@ -305,6 +309,63 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  Future<void> _deleteAccountAndData() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Excluir sua conta e todos os dados?'),
+        content: const Text(
+          'Isso apaga seu login permanentemente e, se você for o único membro '
+          'do household, todos os lançamentos, metas, orçamentos e '
+          'configurações junto. Não pode ser desfeito.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              'Excluir tudo',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _isDeletingAccount = true);
+    try {
+      await ref.read(supabaseClientProvider).functions.invoke('delete-account');
+      Haptics.success();
+      if (mounted) await ref.read(authRepositoryProvider).signOut();
+    } on FunctionsHttpException catch (e) {
+      final details = e.details;
+      final message = details is Map
+          ? details['message'] as String?
+          : null;
+      Haptics.warning();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message ?? 'Não foi possível excluir sua conta agora.'),
+          ),
+        );
+      }
+    } catch (_) {
+      Haptics.warning();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível excluir sua conta. Tente novamente.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isDeletingAccount = false);
+    }
+  }
+
   Future<void> _editCategory(Category category) async {
     final result = await showAddCategoryDialog(
       context,
@@ -362,17 +423,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  Future<void> _addAccount() async {
-    final controller = TextEditingController();
-    final name = await showDialog<String>(
+  Future<({String name, double initialBalance})?> _promptAccountDetails({Account? existing}) async {
+    final nameController = TextEditingController(text: existing?.name ?? '');
+    final balanceController = TextEditingController(
+      text: existing == null
+          ? ''
+          : existing.initialBalance.toStringAsFixed(2).replaceAll('.', ','),
+    );
+    final result = await showDialog<({String name, double initialBalance})>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Nova conta'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(hintText: 'Nome (ex.: "Nubank")'),
+        title: Text(existing == null ? 'Nova conta' : 'Editar conta'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(hintText: 'Nome (ex.: "Nubank")'),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            TextField(
+              controller: balanceController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(hintText: 'Saldo inicial', prefixText: 'R\$ '),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -380,20 +457,56 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             child: const Text('Cancelar'),
           ),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: const Text('Criar'),
+            onPressed: () {
+              final name = nameController.text.trim();
+              if (name.isEmpty) return;
+              final raw = balanceController.text.trim().replaceAll('.', '').replaceAll(',', '.');
+              final balance = double.tryParse(raw) ?? 0;
+              Navigator.of(context).pop((name: name, initialBalance: balance));
+            },
+            child: Text(existing == null ? 'Criar' : 'Salvar'),
           ),
         ],
       ),
     );
-    if (name == null || name.isEmpty) return;
+    nameController.dispose();
+    balanceController.dispose();
+    return result;
+  }
+
+  Future<void> _addAccount() async {
+    final input = await _promptAccountDetails();
+    if (input == null) return;
 
     final household = ref.read(currentHouseholdProvider).valueOrNull;
     if (household == null) return;
 
     try {
       await ref.read(accountRepositoryProvider).create(
-            Account(id: '', householdId: household.id, name: name, ownerMemberId: null),
+            Account(
+              id: '',
+              householdId: household.id,
+              name: input.name,
+              ownerMemberId: null,
+              initialBalance: input.initialBalance,
+            ),
+          );
+      ref.invalidate(accountsProvider);
+      Haptics.success();
+    } catch (_) {
+      Haptics.warning();
+    }
+  }
+
+  Future<void> _editAccount(Account account) async {
+    final input = await _promptAccountDetails(existing: account);
+    if (input == null) return;
+
+    try {
+      await ref.read(accountRepositoryProvider).update(
+            id: account.id,
+            name: input.name,
+            initialBalance: input.initialBalance,
           );
       ref.invalidate(accountsProvider);
       Haptics.success();
@@ -673,9 +786,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       return ListTile(
                         leading: const Icon(Icons.account_balance_outlined),
                         title: Text(account.name),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline_rounded, size: 20),
-                          onPressed: () => _deleteAccount(account.id),
+                        subtitle: Text(
+                          CurrencyFormatter.format(account.currentBalance ?? account.initialBalance),
+                          style: AppTypography.caption,
+                        ),
+                        onTap: () => unawaited(
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => AccountDetailScreen(account: account)),
+                          ),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined, size: 20),
+                              onPressed: () => _editAccount(account),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline_rounded, size: 20),
+                              onPressed: () => _deleteAccount(account.id),
+                            ),
+                          ],
                         ),
                       );
                     }).toList(),
@@ -699,6 +830,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Text('Sair do household'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            OutlinedButton(
+              onPressed: _isDeletingAccount ? null : () => unawaited(_deleteAccountAndData()),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+                side: BorderSide(color: Theme.of(context).colorScheme.error),
+              ),
+              child: _isDeletingAccount
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Excluir minha conta e dados'),
             ),
           ],
         ),

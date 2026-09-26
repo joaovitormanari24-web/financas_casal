@@ -13,6 +13,7 @@ IconData _iconForKind(String kind) => switch (kind) {
       'budget' => Icons.warning_amber_rounded,
       'recurring' => Icons.autorenew_rounded,
       'goal' => Icons.track_changes_rounded,
+      'reminder' => Icons.notifications_active_outlined,
       _ => Icons.info_outline_rounded,
     };
 
