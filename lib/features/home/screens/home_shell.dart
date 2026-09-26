@@ -15,11 +15,14 @@ import '../../budgets/screens/budgets_screen.dart';
 import '../../notifications/screens/notifications_screen.dart';
 import '../../settings/screens/settings_screen.dart';
 import '../../simulator/screens/simulator_screen.dart';
+import '../../../models/category.dart';
 import '../../../models/enums.dart';
+import '../../../models/household.dart';
 import '../../../models/transaction.dart' as models;
 import '../../../shared/utils/category_icons.dart';
 import '../../../shared/utils/currency_formatter.dart';
 import '../../../shared/utils/haptics.dart';
+import '../../../shared/utils/report_export.dart';
 
 class HomeShell extends ConsumerWidget {
   const HomeShell({super.key});
@@ -144,7 +147,13 @@ class HomeShell extends ConsumerWidget {
               const SizedBox(height: AppSpacing.lg),
               const _MonthlyTrendChart(),
               const SizedBox(height: AppSpacing.lg),
-              Text('Lançamentos', style: AppTypography.title),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Lançamentos', style: AppTypography.title),
+                  const _ExportButton(),
+                ],
+              ),
               const SizedBox(height: AppSpacing.xs),
               const _TransactionSearchBar(),
               const SizedBox(height: AppSpacing.xs),
@@ -194,8 +203,44 @@ class _NotificationsButton extends ConsumerWidget {
 class _MonthSelector extends ConsumerWidget {
   const _MonthSelector();
 
+  Future<void> _pickCustomRange(BuildContext context, WidgetRef ref) async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 5),
+      lastDate: DateTime(now.year + 1),
+      initialDateRange: ref.read(customDateRangeProvider),
+      locale: const Locale('pt', 'BR'),
+    );
+    if (picked != null) {
+      ref.read(customDateRangeProvider.notifier).state = picked;
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final customRange = ref.watch(customDateRangeProvider);
+
+    if (customRange != null) {
+      final formatter = DateFormat('dd/MM/yy', 'pt_BR');
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.date_range_rounded, size: 18, color: AppColors.of(context).textSecondary),
+          const SizedBox(width: AppSpacing.xs),
+          Text(
+            '${formatter.format(customRange.start)} - ${formatter.format(customRange.end)}',
+            style: AppTypography.subtitle,
+          ),
+          IconButton(
+            icon: const Icon(Icons.close_rounded, size: 18),
+            tooltip: 'Voltar pro mês',
+            onPressed: () => ref.read(customDateRangeProvider.notifier).state = null,
+          ),
+        ],
+      );
+    }
+
     final month = ref.watch(selectedMonthProvider);
     final label = DateFormat('MMMM yyyy', 'pt_BR').format(month);
 
@@ -224,7 +269,142 @@ class _MonthSelector extends ConsumerWidget {
                 DateTime(month.year, month.month + 1, 1);
           },
         ),
+        IconButton(
+          icon: const Icon(Icons.date_range_outlined, size: 20),
+          tooltip: 'Escolher período',
+          onPressed: () => unawaited(_pickCustomRange(context, ref)),
+        ),
       ],
+    );
+  }
+}
+
+class _ExportButton extends ConsumerStatefulWidget {
+  const _ExportButton();
+
+  @override
+  ConsumerState<_ExportButton> createState() => _ExportButtonState();
+}
+
+class _ExportButtonState extends ConsumerState<_ExportButton> {
+  bool _isExporting = false;
+
+  String _periodFileLabel() {
+    final customRange = ref.read(customDateRangeProvider);
+    if (customRange != null) {
+      final f = DateFormat('yyyyMMdd');
+      return '${f.format(customRange.start)}_${f.format(customRange.end)}';
+    }
+    final month = ref.read(selectedMonthProvider);
+    return DateFormat('yyyy_MM').format(month);
+  }
+
+  String _periodTitle() {
+    final customRange = ref.read(customDateRangeProvider);
+    if (customRange != null) {
+      final f = DateFormat('dd/MM/yyyy');
+      return 'Período: ${f.format(customRange.start)} - ${f.format(customRange.end)}';
+    }
+    final month = ref.read(selectedMonthProvider);
+    final label = DateFormat('MMMM yyyy', 'pt_BR').format(month);
+    return label[0].toUpperCase() + label.substring(1);
+  }
+
+  Future<void> _export({required bool asPdf}) async {
+    final transactions = ref.read(filteredTransactionsProvider);
+    if (transactions.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nenhum lançamento pra exportar nesse período.')),
+      );
+      return;
+    }
+
+    setState(() => _isExporting = true);
+    try {
+      final categories = ref.read(categoriesProvider).valueOrNull ?? const <Category>[];
+      final members = ref.read(householdMembersProvider).valueOrNull ?? const <HouseholdMember>[];
+      final categoriesById = {for (final c in categories) c.id: c};
+      final membersById = {for (final m in members) m.id: m};
+      final periodLabel = _periodFileLabel();
+
+      double income = 0;
+      double expense = 0;
+      for (final t in transactions) {
+        if (t.type == TransactionType.income) {
+          income += t.amount;
+        } else if (t.type == TransactionType.expense) {
+          expense += t.amount;
+        }
+      }
+
+      if (asPdf) {
+        await ReportExport.downloadPdf(
+          transactions: transactions,
+          categoriesById: categoriesById,
+          membersById: membersById,
+          periodLabel: periodLabel,
+          periodTitle: _periodTitle(),
+          income: income,
+          expense: expense,
+        );
+      } else {
+        ReportExport.downloadCsv(
+          transactions: transactions,
+          categoriesById: categoriesById,
+          membersById: membersById,
+          periodLabel: periodLabel,
+        );
+      }
+      Haptics.success();
+    } catch (_) {
+      Haptics.warning();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível exportar. Tente novamente.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
+  Future<void> _showOptions() async {
+    final choice = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.table_chart_outlined),
+              title: const Text('Planilha (CSV)'),
+              onTap: () => Navigator.of(context).pop(false),
+            ),
+            ListTile(
+              leading: const Icon(Icons.picture_as_pdf_outlined),
+              title: const Text('Relatório (PDF)'),
+              onTap: () => Navigator.of(context).pop(true),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null) return;
+    await _export(asPdf: choice);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: 'Exportar',
+      icon: _isExporting
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.ios_share_rounded, size: 20),
+      onPressed: _isExporting ? null : () => unawaited(_showOptions()),
     );
   }
 }

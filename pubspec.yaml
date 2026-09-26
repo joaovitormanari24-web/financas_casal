@@ -50,6 +50,10 @@ dependencies:
   # Comprovantes (foto/galeria)
   image_picker: ^1.1.2
 
+  # Exportar relatório
+  csv: ^6.0.0
+  pdf: ^3.11.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

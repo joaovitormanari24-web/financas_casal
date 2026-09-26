@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' show DateTimeRange;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -7,6 +8,7 @@ import '../../data/repositories/category_repository.dart';
 import '../../data/repositories/financial_simulation_repository.dart';
 import '../../data/repositories/goal_repository.dart';
 import '../../data/repositories/notification_repository.dart';
+import '../../data/repositories/push_subscription_repository.dart';
 import '../../data/repositories/recurring_transaction_repository.dart';
 import '../../data/repositories/transaction_repository.dart';
 import '../../models/accounts.dart';
@@ -54,6 +56,10 @@ final selectedMonthProvider = StateProvider<DateTime>((ref) {
   return DateTime(now.year, now.month, 1);
 });
 
+/// Intervalo de datas customizado — quando não nulo, tem prioridade sobre
+/// [selectedMonthProvider] na Home (dashboard e lista de lançamentos).
+final customDateRangeProvider = StateProvider<DateTimeRange?>((ref) => null);
+
 final categoriesProvider = FutureProvider<List<Category>>((ref) async {
   final household = await ref.watch(currentHouseholdProvider.future);
   if (household == null) return const [];
@@ -76,11 +82,19 @@ final currentMemberProvider = FutureProvider<HouseholdMember?>((ref) async {
 final transactionsProvider = FutureProvider<List<Transaction>>((ref) async {
   final household = await ref.watch(currentHouseholdProvider.future);
   if (household == null) return const [];
+  final repo = ref.watch(transactionRepositoryProvider);
+
+  final customRange = ref.watch(customDateRangeProvider);
+  if (customRange != null) {
+    return repo.fetchForDateRange(
+      householdId: household.id,
+      start: customRange.start,
+      end: customRange.end.add(const Duration(days: 1)),
+    );
+  }
+
   final month = ref.watch(selectedMonthProvider);
-  return ref.watch(transactionRepositoryProvider).fetchForMonth(
-        householdId: household.id,
-        referenceMonth: month,
-      );
+  return repo.fetchForMonth(householdId: household.id, referenceMonth: month);
 });
 
 /// Texto de busca por descrição na lista de lançamentos da Home.
@@ -196,6 +210,10 @@ final notificationsProvider = FutureProvider<List<AppNotification>>((ref) async 
   final household = await ref.watch(currentHouseholdProvider.future);
   if (household == null) return const [];
   return ref.watch(notificationRepositoryProvider).fetchForHousehold(household.id);
+});
+
+final pushSubscriptionRepositoryProvider = Provider<PushSubscriptionRepository>((ref) {
+  return PushSubscriptionRepository(ref.watch(supabaseClientProvider));
 });
 
 final unreadNotificationsCountProvider = Provider<int>((ref) {

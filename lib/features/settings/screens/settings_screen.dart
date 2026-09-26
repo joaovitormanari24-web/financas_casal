@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -9,6 +11,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../models/accounts.dart';
 import '../../../models/category.dart';
+import '../../../shared/services/push_notification_service.dart';
 import '../../../shared/utils/category_icons.dart';
 import '../../../shared/utils/haptics.dart';
 import '../../transactions/screens/add_category_dialog.dart';
@@ -22,9 +25,75 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _nameController = TextEditingController();
+  final _pushService = const PushNotificationService();
   bool _isSavingName = false;
   bool _isLeaving = false;
   String? _prefilledFrom;
+
+  bool _pushSupported = true;
+  bool _pushEnabled = false;
+  bool _isTogglingPush = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_checkPushStatus());
+  }
+
+  Future<void> _checkPushStatus() async {
+    if (!_pushService.isSupported) {
+      if (mounted) setState(() => _pushSupported = false);
+      return;
+    }
+    try {
+      final endpoint = await _pushService.currentEndpoint();
+      if (mounted) setState(() => _pushEnabled = endpoint != null);
+    } catch (_) {
+      // Mantém o switch desligado — usuário pode tentar ativar manualmente.
+    }
+  }
+
+  Future<void> _togglePush(bool value) async {
+    final member = ref.read(currentMemberProvider).valueOrNull;
+    final household = ref.read(currentHouseholdProvider).valueOrNull;
+    if (member == null || household == null) return;
+
+    setState(() => _isTogglingPush = true);
+    try {
+      if (value) {
+        final sub = await _pushService.subscribe();
+        await ref.read(pushSubscriptionRepositoryProvider).save(
+              householdId: household.id,
+              memberId: member.id,
+              endpoint: sub.endpoint,
+              p256dh: sub.p256dh,
+              auth: sub.auth,
+            );
+        if (mounted) setState(() => _pushEnabled = true);
+      } else {
+        final endpoint = await _pushService.currentEndpoint();
+        await _pushService.unsubscribe();
+        if (endpoint != null) {
+          await ref.read(pushSubscriptionRepositoryProvider).deleteByEndpoint(endpoint);
+        }
+        if (mounted) setState(() => _pushEnabled = false);
+      }
+      Haptics.success();
+    } catch (_) {
+      Haptics.warning();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Não foi possível ativar. Verifique a permissão de notificações do navegador.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isTogglingPush = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -328,6 +397,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ],
                 ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Text('Notificações', style: AppTypography.captionEmphasis),
+            const SizedBox(height: AppSpacing.xs),
+            Card(
+              child: SwitchListTile(
+                title: const Text('Avisos push no navegador'),
+                subtitle: Text(
+                  !_pushSupported
+                      ? 'Não suportado neste navegador.'
+                      : 'Conta recorrente lançada, orçamento estourado e metas atingidas, '
+                          'mesmo com o app fechado.',
+                  style: AppTypography.caption,
+                ),
+                value: _pushEnabled,
+                onChanged: (!_pushSupported || _isTogglingPush)
+                    ? null
+                    : (value) => unawaited(_togglePush(value)),
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
