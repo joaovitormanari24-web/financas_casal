@@ -148,6 +148,8 @@ class HomeShell extends ConsumerWidget {
               const SizedBox(height: AppSpacing.lg),
               const _MonthlyTrendChart(),
               const SizedBox(height: AppSpacing.lg),
+              const _RecurringSection(),
+              const SizedBox(height: AppSpacing.lg),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -804,6 +806,175 @@ class _LegendDot extends StatelessWidget {
         const SizedBox(width: 4),
         Text(label, style: AppTypography.caption),
       ],
+    );
+  }
+}
+
+/// Gastos recorrentes (aluguel, assinaturas, etc.) — vivia numa aba própria
+/// no rodapé; juntado aqui pra ficar ao lado dos lançamentos que eles
+/// geram.
+class _RecurringSection extends ConsumerWidget {
+  const _RecurringSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final recurringAsync = ref.watch(recurringTransactionsProvider);
+    final categoriesAsync = ref.watch(categoriesProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Recorrentes', style: AppTypography.title),
+            TextButton.icon(
+              onPressed: () => unawaited(
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const AddTransactionScreen(
+                      initialTxRepeatMode: TxRepeatMode.recurring,
+                    ),
+                  ),
+                ),
+              ),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Nova'),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        recurringAsync.when(
+          loading: () => const Padding(
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          ),
+          error: (_, __) =>
+              Text('Não foi possível carregar.', style: AppTypography.caption),
+          data: (items) {
+            if (items.isEmpty) {
+              return Text(
+                'Nenhum gasto recorrente ainda. Cadastre assinaturas, aluguel ou '
+                'outras contas fixas — o app lança sozinho todo mês.',
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.of(context).textTertiary,
+                ),
+              );
+            }
+            final categoriesById = {
+              for (final category in categoriesAsync.valueOrNull ?? const <Category>[])
+                category.id: category,
+            };
+            return Column(
+              children: items.map((item) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: _RecurringCard(item: item, category: categoriesById[item.categoryId]),
+                );
+              }).toList(),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _RecurringCard extends ConsumerWidget {
+  const _RecurringCard({required this.item, required this.category});
+
+  final models.RecurringTransaction item;
+  final Category? category;
+
+  Future<void> _delete(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Excluir recorrência?'),
+        content: const Text('Lançamentos já gerados não são afetados.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              'Excluir',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await ref.read(recurringTransactionRepositoryProvider).delete(item.id);
+      ref.invalidate(recurringTransactionsProvider);
+      Haptics.success();
+    } catch (_) {
+      Haptics.warning();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = AppColors.of(context);
+    final color = category != null ? colorFromHex(category!.colorHex) : palette.accent;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(categoryIconData(category?.icon ?? ''), size: 20, color: color),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.description.isEmpty ? 'Sem descrição' : item.description,
+                    style: AppTypography.body,
+                  ),
+                  Text(
+                    '${item.frequency.label} · ${CurrencyFormatter.format(item.amount)}'
+                    '${item.endDate != null ? ' · até ${DateFormat('dd/MM/yyyy', 'pt_BR').format(item.endDate!)}' : ''}',
+                    style: AppTypography.caption.copyWith(color: palette.textTertiary),
+                  ),
+                ],
+              ),
+            ),
+            Switch(
+              value: item.active,
+              onChanged: (value) async {
+                try {
+                  await ref
+                      .read(recurringTransactionRepositoryProvider)
+                      .setActive(item.id, value);
+                  ref.invalidate(recurringTransactionsProvider);
+                  Haptics.tapLight();
+                } catch (_) {
+                  Haptics.warning();
+                }
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded, size: 20),
+              onPressed: () => _delete(context, ref),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
