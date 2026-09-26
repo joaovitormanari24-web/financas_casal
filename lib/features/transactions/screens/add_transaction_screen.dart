@@ -308,20 +308,13 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
               reminderDaysBefore: _hasReminder ? _reminderDaysBefore : null,
             );
             final recurringRepo = ref.read(recurringTransactionRepositoryProvider);
-            final created = await recurringRepo.create(recurring);
-            if (_hasAmountChange) {
-              await recurringRepo.addAmountChange(
-                recurringTransactionId: created.id,
-                effectiveDate: _amountChangeDate!,
-                newAmount: _parseAmount(_newAmountController.text)!,
-              );
-            }
-            // Se o dia do ciclo atual já chegou (ou passou), gera o
-            // lançamento desse mês/semana na hora — sem isso, só apareceria
-            // no próximo ciclo, quando a tarefa diária rodar.
-            await ref.read(supabaseClientProvider).rpc(
-              'generate_initial_occurrence',
-              params: {'rt_id': created.id},
+            // Cria a recorrência + reajuste + lançamento do ciclo atual (se
+            // já devido) numa única chamada atômica.
+            await recurringRepo.createWithInitialOccurrence(
+              recurring,
+              amountChangeDate: _hasAmountChange ? _amountChangeDate : null,
+              amountChangeNewAmount:
+                  _hasAmountChange ? _parseAmount(_newAmountController.text) : null,
             );
             ref.invalidate(recurringTransactionsProvider);
             ref.invalidate(transactionsProvider);

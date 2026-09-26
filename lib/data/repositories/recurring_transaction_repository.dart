@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../models/enums.dart';
 import '../../models/transaction.dart';
 
 class RecurringTransactionRepository {
@@ -22,6 +23,32 @@ class RecurringTransactionRepository {
         .select()
         .single();
     return RecurringTransaction.fromJson(row);
+  }
+
+  /// Cria a recorrência, o reajuste de valor opcional e o lançamento do
+  /// ciclo atual (se já devido) numa única chamada atômica — evita a
+  /// recorrência ficar "órfã" sem lançamento por causa de uma janela de
+  /// leitura entre chamadas separadas.
+  Future<String> createWithInitialOccurrence(
+    RecurringTransaction recurring, {
+    DateTime? amountChangeDate,
+    double? amountChangeNewAmount,
+  }) async {
+    final newId = await _client.rpc('create_recurring_transaction', params: {
+      'p_household_id': recurring.householdId,
+      'p_description': recurring.description,
+      'p_amount': recurring.amount,
+      'p_category_id': recurring.categoryId,
+      'p_frequency': recurring.frequency.dbValue,
+      'p_day_of_cycle': recurring.dayOfCycle,
+      'p_payment_method': recurring.paymentMethod.dbValue,
+      'p_paid_by_member_id': recurring.paidByMemberId,
+      'p_end_date': recurring.endDate?.toIso8601String(),
+      'p_reminder_days_before': recurring.reminderDaysBefore,
+      'p_amount_change_date': amountChangeDate?.toIso8601String(),
+      'p_amount_change_new_amount': amountChangeNewAmount,
+    });
+    return newId as String;
   }
 
   /// Registra que, a partir de [effectiveDate], o valor passa a ser
