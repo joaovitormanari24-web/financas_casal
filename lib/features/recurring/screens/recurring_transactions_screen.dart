@@ -12,7 +12,7 @@ import '../../../models/transaction.dart';
 import '../../../shared/utils/category_icons.dart';
 import '../../../shared/utils/currency_formatter.dart';
 import '../../../shared/utils/haptics.dart';
-import 'add_recurring_transaction_screen.dart';
+import '../../transactions/screens/add_transaction_screen.dart';
 
 class RecurringTransactionsScreen extends ConsumerWidget {
   const RecurringTransactionsScreen({super.key});
@@ -88,7 +88,11 @@ class RecurringTransactionsScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const AddRecurringTransactionScreen()),
+          MaterialPageRoute(
+            builder: (_) => const AddTransactionScreen(
+              initialTxRepeatMode: TxRepeatMode.recurring,
+            ),
+          ),
         ),
         backgroundColor: palette.textPrimary,
         foregroundColor: palette.background,

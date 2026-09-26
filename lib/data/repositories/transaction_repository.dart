@@ -51,49 +51,42 @@ class TransactionRepository {
 
   /// Cria o plano de parcelamento e já lança todas as parcelas futuras —
   /// elas entram automaticamente na previsão dos meses seguintes, sem
-  /// precisar cadastrar uma a uma.
+  /// precisar cadastrar uma a uma. [installmentAmount] é o valor de cada
+  /// parcela (não o total) — o casal já sabe quanto paga por mês.
   Future<void> createInstallmentPurchase({
     required String householdId,
     required String description,
-    required double totalAmount,
+    required double installmentAmount,
     required int installmentCount,
     required DateTime firstDueDate,
-    required String creditCardId,
     required String categoryId,
     required String paidByMemberId,
+    required String paymentMethod,
   }) async {
-    final baseAmount = double.parse((totalAmount / installmentCount).toStringAsFixed(2));
-    final lastAmount = double.parse(
-      (totalAmount - baseAmount * (installmentCount - 1)).toStringAsFixed(2),
-    );
-
     final planRow = await _client
         .from('installment_plans')
         .insert({
           'household_id': householdId,
           'description': description,
-          'total_amount': totalAmount,
+          'total_amount': installmentAmount * installmentCount,
           'installment_count': installmentCount,
-          'installment_amount': baseAmount,
+          'installment_amount': installmentAmount,
           'first_due_date': firstDueDate.toIso8601String(),
-          'credit_card_id': creditCardId,
         })
         .select()
         .single();
     final planId = planRow['id'] as String;
 
     final rows = List.generate(installmentCount, (i) {
-      final isLast = i == installmentCount - 1;
       return {
         'household_id': householdId,
         'type': 'expense',
-        'amount': isLast ? lastAmount : baseAmount,
+        'amount': installmentAmount,
         'description': '$description (${i + 1}/$installmentCount)',
         'category_id': categoryId,
         'date': _addMonthsClamped(firstDueDate, i).toIso8601String(),
         'paid_by_member_id': paidByMemberId,
-        'payment_method': 'credit',
-        'credit_card_id': creditCardId,
+        'payment_method': paymentMethod,
         'installment_plan_id': planId,
         'installment_number': i + 1,
         'installment_total': installmentCount,
