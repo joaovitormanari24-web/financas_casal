@@ -79,6 +79,31 @@ final transactionsProvider = FutureProvider<List<Transaction>>((ref) async {
       );
 });
 
+/// Texto de busca por descrição na lista de lançamentos da Home.
+final transactionSearchQueryProvider = StateProvider<String>((ref) => '');
+
+/// Filtro opcional por categoria na lista de lançamentos.
+final transactionCategoryFilterProvider = StateProvider<String?>((ref) => null);
+
+/// Filtro opcional por forma de pagamento na lista de lançamentos.
+final transactionPaymentMethodFilterProvider = StateProvider<PaymentMethod?>((ref) => null);
+
+/// [transactionsProvider] já filtrado pela busca/categoria/forma de
+/// pagamento selecionados — o que a Home efetivamente lista.
+final filteredTransactionsProvider = Provider<List<Transaction>>((ref) {
+  final transactions = ref.watch(transactionsProvider).valueOrNull ?? const [];
+  final query = ref.watch(transactionSearchQueryProvider).trim().toLowerCase();
+  final categoryId = ref.watch(transactionCategoryFilterProvider);
+  final paymentMethod = ref.watch(transactionPaymentMethodFilterProvider);
+
+  return transactions.where((t) {
+    if (query.isNotEmpty && !t.description.toLowerCase().contains(query)) return false;
+    if (categoryId != null && t.categoryId != categoryId) return false;
+    if (paymentMethod != null && t.paymentMethod != paymentMethod) return false;
+    return true;
+  }).toList();
+});
+
 /// Resumo do mês selecionado: receitas, despesas e saldo.
 class MonthSummary {
   const MonthSummary({required this.income, required this.expense});

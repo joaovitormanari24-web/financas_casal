@@ -124,6 +124,8 @@ class HomeShell extends ConsumerWidget {
               const SizedBox(height: AppSpacing.lg),
               Text('Lançamentos', style: AppTypography.title),
               const SizedBox(height: AppSpacing.xs),
+              const _TransactionSearchBar(),
+              const SizedBox(height: AppSpacing.xs),
               const _TransactionsList(),
               const SizedBox(height: AppSpacing.xxxl),
             ],
@@ -406,6 +408,154 @@ class _SpendingByCategoryChart extends ConsumerWidget {
   }
 }
 
+class _TransactionSearchBar extends ConsumerStatefulWidget {
+  const _TransactionSearchBar();
+
+  @override
+  ConsumerState<_TransactionSearchBar> createState() => _TransactionSearchBarState();
+}
+
+class _TransactionSearchBarState extends ConsumerState<_TransactionSearchBar> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: ref.read(transactionSearchQueryProvider));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _openFilters(BuildContext context, WidgetRef ref) async {
+    final categories = ref.read(categoriesProvider).valueOrNull ?? const [];
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return Consumer(
+          builder: (context, ref, _) {
+            final categoryFilter = ref.watch(transactionCategoryFilterProvider);
+            final paymentFilter = ref.watch(transactionPaymentMethodFilterProvider);
+            return Padding(
+              padding: EdgeInsets.only(
+                left: AppSpacing.screenPadding,
+                right: AppSpacing.screenPadding,
+                top: AppSpacing.md,
+                bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Filtros', style: AppTypography.title),
+                      TextButton(
+                        onPressed: () {
+                          ref.read(transactionCategoryFilterProvider.notifier).state = null;
+                          ref.read(transactionPaymentMethodFilterProvider.notifier).state =
+                              null;
+                        },
+                        child: const Text('Limpar'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text('Categoria', style: AppTypography.captionEmphasis),
+                  const SizedBox(height: AppSpacing.xs),
+                  Wrap(
+                    spacing: AppSpacing.xs,
+                    runSpacing: AppSpacing.xs,
+                    children: categories.map((category) {
+                      return ChoiceChip(
+                        label: Text(category.name),
+                        avatar: Icon(categoryIconData(category.icon), size: 16),
+                        selected: category.id == categoryFilter,
+                        onSelected: (selected) {
+                          ref.read(transactionCategoryFilterProvider.notifier).state =
+                              selected ? category.id : null;
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text('Forma de pagamento', style: AppTypography.captionEmphasis),
+                  const SizedBox(height: AppSpacing.xs),
+                  Wrap(
+                    spacing: AppSpacing.xs,
+                    runSpacing: AppSpacing.xs,
+                    children: PaymentMethod.values.map((method) {
+                      return ChoiceChip(
+                        label: Text(method.label),
+                        selected: method == paymentFilter,
+                        onSelected: (selected) {
+                          ref.read(transactionPaymentMethodFilterProvider.notifier).state =
+                              selected ? method : null;
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final categoryFilter = ref.watch(transactionCategoryFilterProvider);
+    final paymentFilter = ref.watch(transactionPaymentMethodFilterProvider);
+    final hasActiveFilter = categoryFilter != null || paymentFilter != null;
+    final palette = AppColors.of(context);
+
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _controller,
+            decoration: const InputDecoration(
+              hintText: 'Buscar lançamento',
+              prefixIcon: Icon(Icons.search_rounded, size: 20),
+              isDense: true,
+            ),
+            onChanged: (value) =>
+                ref.read(transactionSearchQueryProvider.notifier).state = value,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.filter_list_rounded),
+              tooltip: 'Filtros',
+              onPressed: () => unawaited(_openFilters(context, ref)),
+            ),
+            if (hasActiveFilter)
+              Positioned(
+                right: 6,
+                top: 6,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(color: palette.accent, shape: BoxShape.circle),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 class _TransactionsList extends ConsumerWidget {
   const _TransactionsList();
 
@@ -428,13 +578,27 @@ class _TransactionsList extends ConsumerWidget {
           style: AppTypography.body,
         ),
       ),
-      data: (transactions) {
-        if (transactions.isEmpty) {
+      data: (allTransactions) {
+        final transactions = ref.watch(filteredTransactionsProvider);
+
+        if (allTransactions.isEmpty) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
             child: Center(
               child: Text(
                 'Nenhum lançamento neste mês ainda.',
+                style: AppTypography.body,
+              ),
+            ),
+          );
+        }
+
+        if (transactions.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+            child: Center(
+              child: Text(
+                'Nenhum lançamento encontrado com esse filtro.',
                 style: AppTypography.body,
               ),
             ),
