@@ -72,12 +72,12 @@ class HomeShell extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        leadingWidth: 48,
+        leadingWidth: 56,
         leading: Padding(
           padding: const EdgeInsets.only(left: AppSpacing.screenPadding),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.asset('assets/images/logo.jpg', width: 28, height: 28),
+            borderRadius: BorderRadius.circular(10),
+            child: Image.asset('assets/images/logo.jpg', width: 38, height: 38),
           ),
         ),
         title: GestureDetector(
