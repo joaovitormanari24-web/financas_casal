@@ -18,6 +18,13 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <!--
+    Sem isso, celulares renderizam a página numa largura virtual de
+    desktop (~980px) e só ajustam a escala de verdade depois que o
+    Flutter assume e injeta a própria tag — a logo da splash aparecia
+    minúscula por um instante e "saltava" pro tamanho certo.
+  -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="Finanças do casal, sem complicação.">
 
   <!-- iOS meta tags & icons -->
@@ -40,8 +47,7 @@
       align-items:center;justify-content:center;background:#FAFAF8;
       font-family:-apple-system,BlinkMacSystemFont,sans-serif;z-index:999999;
       transition:opacity .3s ease;">
-    <img src="logo.jpg" alt="" style="width:108px;height:108px;border-radius:26px;
-        box-shadow:0 2px 10px rgba(0,0,0,0.08);" />
+    <img src="logo.png" alt="" style="width:108px;height:108px;" />
     <div style="width:160px;height:4px;background:#E4E2DD;border-radius:999px;
         overflow:hidden;margin-top:22px;">
       <div id="app-loading-bar" style="height:100%;width:0%;background:#1F6F5C;

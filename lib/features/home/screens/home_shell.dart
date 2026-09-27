@@ -75,10 +75,7 @@ class HomeShell extends ConsumerWidget {
         leadingWidth: 56,
         leading: Padding(
           padding: const EdgeInsets.only(left: AppSpacing.screenPadding),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: Image.asset('assets/images/logo.jpg', width: 38, height: 38),
-          ),
+          child: Image.asset('assets/images/logo.png', width: 38, height: 38),
         ),
         title: GestureDetector(
           onTap: () => unawaited(
