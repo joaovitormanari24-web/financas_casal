@@ -1,11 +1,11 @@
 {
-    "name": "financas_casal",
-    "short_name": "financas_casal",
+    "name": "Finanças inteligentes",
+    "short_name": "Finanças inteligentes",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FAFAF8",
+    "theme_color": "#7C5CFC",
+    "description": "Finanças do casal, sem complicação.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
