@@ -72,6 +72,14 @@ class HomeShell extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leadingWidth: 48,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: AppSpacing.screenPadding),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.asset('assets/images/logo.jpg', width: 28, height: 28),
+          ),
+        ),
         title: GestureDetector(
           onTap: () => unawaited(
             Navigator.of(context).push(
@@ -869,14 +877,40 @@ class _TransactionTile extends ConsumerWidget {
     try {
       await ref.read(transactionRepositoryProvider).markPaid(transaction.id);
       ref.invalidate(transactionsProvider);
-      ref.invalidate(overdueTransactionsProvider);
+      ref.invalidate(accountsProvider);
+      Haptics.success();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('"${transaction.description}" marcado como pago.'),
+            action: SnackBarAction(
+              label: 'Desfazer',
+              onPressed: () => unawaited(_undoMarkPaid(context, ref)),
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      Haptics.warning();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível marcar como pago.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _undoMarkPaid(BuildContext context, WidgetRef ref) async {
+    try {
+      await ref.read(transactionRepositoryProvider).markPending(transaction.id);
+      ref.invalidate(transactionsProvider);
       ref.invalidate(accountsProvider);
       Haptics.success();
     } catch (_) {
       Haptics.warning();
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Não foi possível marcar como pago.')),
+          const SnackBar(content: Text('Não foi possível desfazer.')),
         );
       }
     }

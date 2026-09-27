@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../models/enums.dart';
 import '../../models/transaction.dart';
 
 class TransactionRepository {
@@ -88,22 +89,6 @@ class TransactionRepository {
     await _client.from('transactions').delete().eq('id', id);
   }
 
-  /// Pendências com vencimento já passado — não tem recorte de mês porque
-  /// uma conta esquecida do mês passado não deve sumir só porque a Home
-  /// está olhando o mês atual.
-  Future<List<Transaction>> fetchOverdue(String householdId) async {
-    final today = DateTime.now();
-    final todayOnly = DateTime(today.year, today.month, today.day);
-    final rows = await _client
-        .from('transactions')
-        .select()
-        .eq('household_id', householdId)
-        .eq('status', 'pending')
-        .lt('date', todayOnly.toIso8601String())
-        .order('date');
-    return rows.map((row) => Transaction.fromJson(row)).toList();
-  }
-
   /// Confirma que um lançamento pendente já foi pago — a partir daí ele
   /// passa a contar no saldo real da conta.
   Future<void> markPaid(String id) async {
@@ -156,6 +141,10 @@ class TransactionRepository {
     required String categoryId,
     required String paidByMemberId,
     required String paymentMethod,
+    // Deixa o usuário dizer "ainda não paguei essa parcela" quando a data
+    // já passou/é hoje — sem isso, a 1ª parcela sempre nascia paga nesse
+    // caso, diferente do lançamento único (que já tem esse controle).
+    TransactionStatus? firstInstallmentStatus,
   }) async {
     final planRow = await _client
         .from('installment_plans')
@@ -176,6 +165,11 @@ class TransactionRepository {
 
     final rows = List.generate(installmentCount, (i) {
       final dueDate = _addMonthsClamped(firstDueDate, i);
+      final isFirstInstallment = i == 0;
+      final status = isFirstInstallment && firstInstallmentStatus != null
+          ? firstInstallmentStatus.dbValue
+          // Parcela futura nasce pendente — ainda não saiu da conta.
+          : (dueDate.isAfter(todayDateOnly) ? 'pending' : 'paid');
       return {
         'household_id': householdId,
         'type': 'expense',
@@ -188,8 +182,7 @@ class TransactionRepository {
         'installment_plan_id': planId,
         'installment_number': i + 1,
         'installment_total': installmentCount,
-        // Parcela futura nasce pendente — ainda não saiu da conta.
-        'status': dueDate.isAfter(todayDateOnly) ? 'pending' : 'paid',
+        'status': status,
       };
     });
 

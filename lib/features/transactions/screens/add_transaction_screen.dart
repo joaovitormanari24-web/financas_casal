@@ -290,6 +290,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                   categoryId: _categoryId!,
                   paidByMemberId: _paidByMemberId!,
                   paymentMethod: _paymentMethod.dbValue,
+                  firstInstallmentStatus: _isFutureDate(_date) ? null : _status,
                 );
             ref.invalidate(transactionsProvider);
           case TxRepeatMode.recurring:
@@ -318,7 +319,6 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
             );
             ref.invalidate(recurringTransactionsProvider);
             ref.invalidate(transactionsProvider);
-            ref.invalidate(overdueTransactionsProvider);
         }
       }
       Haptics.success();
@@ -738,6 +738,22 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
             trailing: const Icon(Icons.calendar_today_rounded, size: 20),
             onTap: _pickDate,
           ),
+          if (!_isFutureDate(_date))
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text('1ª parcela já foi paga?', style: AppTypography.captionEmphasis),
+              subtitle: Text(
+                _status == TransactionStatus.paid
+                    ? 'Já saiu da conta.'
+                    : 'Pendente — se passar do dia sem marcar, fica atrasada.',
+                style: AppTypography.caption,
+              ),
+              value: _status == TransactionStatus.paid,
+              onChanged: (value) => setState(() {
+                _statusManuallySet = true;
+                _status = value ? TransactionStatus.paid : TransactionStatus.pending;
+              }),
+            ),
         ];
       case TxRepeatMode.recurring:
         return [
