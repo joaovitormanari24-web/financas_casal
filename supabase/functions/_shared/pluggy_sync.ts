@@ -117,10 +117,17 @@ export async function syncItem(admin: SupabaseClient, itemId: string) {
             account_id: accountId,
             external_source: "pluggy",
             external_id: t.id,
+            status: t.status === "PENDING" ? "pending" : "paid",
           },
           { onConflict: "external_id", ignoreDuplicates: true },
         );
-        if (!insertError) importedForAccount += 1;
+        if (!insertError) {
+          importedForAccount += 1;
+        } else {
+          console.error(
+            `insert failed for tx ${t.id}: ${insertError.message} | code=${insertError.code} | details=${insertError.details} | hint=${insertError.hint}`,
+          );
+        }
       }
 
       nextQuery = txRes.next ?? null;
