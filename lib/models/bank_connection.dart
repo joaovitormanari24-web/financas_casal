@@ -30,7 +30,7 @@ class BankConnection extends Equatable {
         institutionName: json['institution_name'] as String?,
         lastSyncedAt: json['last_synced_at'] == null
             ? null
-            : DateTime.parse(json['last_synced_at'] as String),
+            : DateTime.parse(json['last_synced_at'] as String).toLocal(),
       );
 
   @override

@@ -875,16 +875,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('Bancos conectados', style: AppTypography.captionEmphasis),
-                TextButton.icon(
-                  onPressed: _isConnectingBank ? null : () => unawaited(_connectBank()),
-                  icon: _isConnectingBank
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.add_link_rounded, size: 18),
-                  label: const Text('Conectar'),
+                Tooltip(
+                  message: 'Conectar um novo banco via Open Finance',
+                  child: TextButton.icon(
+                    onPressed: _isConnectingBank ? null : () => unawaited(_connectBank()),
+                    icon: _isConnectingBank
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.add_link_rounded, size: 18),
+                    label: const Text('Conectar'),
+                  ),
                 ),
               ],
             ),
@@ -922,6 +925,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               style: AppTypography.caption,
                             ),
                             trailing: IconButton(
+                              tooltip: 'Sincronizar este banco agora',
                               icon: isSyncing
                                   ? const SizedBox(
                                       width: 18,

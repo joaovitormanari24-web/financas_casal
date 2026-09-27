@@ -95,14 +95,17 @@ export async function syncItem(admin: SupabaseClient, itemId: string) {
     let nextQuery: string | null = `?accountId=${pAccount.id}`;
     let importedForAccount = 0;
     let pagesFetched = 0;
-    const fetchedTransactions: Array<{ amount: number; type: string }> = [];
+    // Só as "paid" entram no saldo (account_balances só soma status='paid'),
+    // então o cálculo do saldo inicial tem que usar o mesmo filtro — senão o
+    // saldo de cartão de crédito fica inflado pelas parcelas futuras (pending).
+    const fetchedTransactions: Array<{ amount: number; type: string; status: string }> = [];
 
     while (nextQuery && pagesFetched < 20) {
       const txRes = await pluggyGet(`/v2/transactions${nextQuery}`, apiKey);
       const results = txRes.results ?? [];
 
       for (const t of results) {
-        fetchedTransactions.push({ amount: Number(t.amount), type: t.type });
+        fetchedTransactions.push({ amount: Number(t.amount), type: t.type, status: t.status });
         const isCredit = t.type === "CREDIT";
         const { error: insertError } = await admin.from("transactions").upsert(
           {
@@ -137,10 +140,9 @@ export async function syncItem(admin: SupabaseClient, itemId: string) {
     importedCount += importedForAccount;
 
     if (isNewAccount) {
-      const netImported = fetchedTransactions.reduce(
-        (sum, t) => sum + (t.type === "CREDIT" ? t.amount : -Math.abs(t.amount)),
-        0,
-      );
+      const netImported = fetchedTransactions
+        .filter((t) => t.status !== "PENDING")
+        .reduce((sum, t) => sum + (t.type === "CREDIT" ? t.amount : -Math.abs(t.amount)), 0);
       const reportedBalance = Number(pAccount.balance ?? 0);
       await admin
         .from("accounts")
