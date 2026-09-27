@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -95,6 +97,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   String? _existingReceiptPath;
   String? _existingReceiptSignedUrl;
   bool _removeExistingReceipt = false;
+  bool _isScanning = false;
 
   @override
   void initState() {
@@ -148,13 +151,22 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     }
   }
 
-  Future<void> _pickReceipt() async {
+  Future<XFile?> _pickImage({required String title}) async {
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
       builder: (context) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.screenPadding,
+                AppSpacing.sm,
+                AppSpacing.screenPadding,
+                0,
+              ),
+              child: Text(title, style: AppTypography.captionEmphasis),
+            ),
             ListTile(
               leading: const Icon(Icons.photo_camera_outlined),
               title: const Text('Tirar foto'),
@@ -169,13 +181,13 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
         ),
       ),
     );
-    if (source == null || !mounted) return;
+    if (source == null || !mounted) return null;
 
-    final file = await ImagePicker().pickImage(
-      source: source,
-      imageQuality: 70,
-      maxWidth: 1600,
-    );
+    return ImagePicker().pickImage(source: source, imageQuality: 70, maxWidth: 1600);
+  }
+
+  Future<void> _pickReceipt() async {
+    final file = await _pickImage(title: 'Comprovante');
     if (file == null) return;
 
     final bytes = await file.readAsBytes();
@@ -184,6 +196,92 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       _pickedReceiptBytes = bytes;
       _removeExistingReceipt = false;
     });
+  }
+
+  Future<void> _scanReceipt() async {
+    final file = await _pickImage(title: 'Escanear comprovante com IA');
+    if (file == null) return;
+
+    final bytes = await file.readAsBytes();
+    setState(() {
+      _pickedReceipt = file;
+      _pickedReceiptBytes = bytes;
+      _removeExistingReceipt = false;
+      _isScanning = true;
+    });
+
+    try {
+      final household = await ref.read(currentHouseholdProvider.future);
+      if (household == null) return;
+
+      final ext = file.name.contains('.') ? file.name.split('.').last.toLowerCase() : 'jpg';
+      final mediaType = ext == 'png' ? 'image/png' : 'image/jpeg';
+
+      final res = await ref.read(supabaseClientProvider).functions.invoke(
+            'scan-receipt',
+            body: {
+              'image': base64Encode(bytes),
+              'mediaType': mediaType,
+              'householdId': household.id,
+            },
+          );
+
+      final data = res.data as Map<String, dynamic>;
+      if (data['error'] != null) {
+        throw Exception(data['error']);
+      }
+
+      final amount = (data['amount'] as num?)?.toDouble();
+      final description = data['description'] as String?;
+      final typeStr = data['type'] as String?;
+      final categoryName = data['category'] as String?;
+      final dateStr = data['date'] as String?;
+      final categories = ref.read(categoriesProvider).valueOrNull ?? const <Category>[];
+      final matchedCategory = categoryName == null
+          ? null
+          : categories.firstWhereOrNull(
+              (c) => c.name.toLowerCase() == categoryName.toLowerCase(),
+            );
+      final parsedDate = dateStr == null ? null : DateTime.tryParse(dateStr);
+
+      setState(() {
+        if (amount != null && amount > 0) {
+          _amountController.text = amount.toStringAsFixed(2).replaceAll('.', ',');
+        }
+        if (description != null && description.isNotEmpty) {
+          _descriptionController.text = description;
+        }
+        if (typeStr == 'income' || typeStr == 'expense') {
+          _type = typeStr == 'income' ? TransactionType.income : TransactionType.expense;
+          if (!_availablePaymentMethods.contains(_paymentMethod)) {
+            _paymentMethod = _availablePaymentMethods.first;
+          }
+        }
+        if (matchedCategory != null) _categoryId = matchedCategory.id;
+        if (parsedDate != null) {
+          _date = parsedDate;
+          if (!_statusManuallySet) _status = _defaultStatusForDate(parsedDate);
+        }
+      });
+
+      Haptics.success();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Comprovante lido — revise os campos antes de salvar.')),
+        );
+      }
+    } catch (_) {
+      Haptics.warning();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Não consegui ler o comprovante automaticamente. Preencha manualmente.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isScanning = false);
+    }
   }
 
   Future<void> _syncReceipt(String transactionId, String householdId) async {
@@ -492,6 +590,20 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                         }),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+                if (!widget.isEditing && _repeatMode == TxRepeatMode.once) ...[
+                  OutlinedButton.icon(
+                    onPressed: _isScanning ? null : _scanReceipt,
+                    icon: _isScanning
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.auto_awesome_rounded, size: 18),
+                    label: Text(_isScanning ? 'Lendo comprovante…' : 'Escanear comprovante com IA'),
                   ),
                   const SizedBox(height: AppSpacing.lg),
                 ],
