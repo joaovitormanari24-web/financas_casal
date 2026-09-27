@@ -41,3 +41,4 @@ Thumbs.db
 
 # Scripts/artefatos de debug local (headless Chrome, capturas de tela)
 scratch_shots/
+supabase/.temp/
