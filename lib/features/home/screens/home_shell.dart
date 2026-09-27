@@ -26,7 +26,12 @@ import '../../../shared/utils/report_export.dart';
 class HomeShell extends ConsumerWidget {
   const HomeShell({super.key});
 
-  Future<void> _showInviteCode(BuildContext context, WidgetRef ref, String householdId) async {
+  Future<void> _showInviteCode(
+    BuildContext context,
+    WidgetRef ref,
+    String householdId,
+    String householdName,
+  ) async {
     try {
       final code = await ref
           .read(householdRepositoryProvider)
@@ -37,7 +42,8 @@ class HomeShell extends ConsumerWidget {
         builder: (context) => AlertDialog(
           title: const Text('Código de convite'),
           content: Text(
-            'Compartilhe "$code" com seu parceiro(a). Válido por 7 dias.',
+            'Compartilhe "$code" com quem você quer convidar para o espaço '
+            '"$householdName". Válido por 7 dias.',
           ),
           actions: [
             TextButton(
@@ -96,9 +102,10 @@ class HomeShell extends ConsumerWidget {
                 ? const SizedBox.shrink()
                 : IconButton(
                     icon: const Icon(Icons.person_add_alt_outlined),
-                    tooltip: 'Convidar parceiro(a)',
-                    onPressed: () =>
-                        unawaited(_showInviteCode(context, ref, household.id)),
+                    tooltip: 'Convidar para este espaço',
+                    onPressed: () => unawaited(
+                      _showInviteCode(context, ref, household.id, household.name),
+                    ),
                   ),
             orElse: () => const SizedBox.shrink(),
           ),

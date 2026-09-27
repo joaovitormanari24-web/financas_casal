@@ -35,6 +35,24 @@ class HouseholdRepository {
     return Household.fromJson(householdJson);
   }
 
+  /// Todos os households a que o usuário logado pertence — um mesmo usuário
+  /// pode estar em mais de um (ex.: "Casal" e "Empresa"), completamente
+  /// isolados entre si pelo RLS de cada tabela.
+  Future<List<Household>> fetchHouseholds() async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return [];
+
+    final rows = await _client
+        .from('household_members')
+        .select('households(*)')
+        .eq('user_id', userId)
+        .order('created_at');
+
+    return rows
+        .map((row) => Household.fromJson(row['households'] as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<List<HouseholdMember>> fetchMembers(String householdId) async {
     final rows = await _client
         .from('household_members')

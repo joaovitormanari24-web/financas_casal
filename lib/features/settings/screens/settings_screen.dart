@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/providers/app_lock_provider.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/finance_providers.dart';
+import '../../../core/providers/household_selection_provider.dart';
 import '../../../core/providers/theme_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -260,14 +261,71 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  Future<void> _leaveHousehold(String memberId) async {
+  Future<void> _switchHousehold(String householdId) async {
+    await ref.read(activeHouseholdIdProvider.notifier).setActive(householdId);
+    Haptics.success();
+  }
+
+  Future<void> _createNewHousehold() async {
+    final result = await showDialog<({String householdName, String displayName})>(
+      context: context,
+      builder: (context) => const _CreateHouseholdDialog(),
+    );
+    if (result == null) return;
+
+    try {
+      final householdId = await ref.read(householdRepositoryProvider).createHousehold(
+            householdName: result.householdName,
+            displayName: result.displayName,
+          );
+      await ref.read(activeHouseholdIdProvider.notifier).setActive(householdId);
+      ref.invalidate(householdsProvider);
+      ref.invalidate(currentHouseholdProvider);
+      Haptics.success();
+    } catch (_) {
+      Haptics.warning();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível criar o espaço.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _joinHouseholdWithCode() async {
+    final result = await showDialog<({String code, String displayName})>(
+      context: context,
+      builder: (context) => const _JoinHouseholdDialog(),
+    );
+    if (result == null) return;
+
+    try {
+      final householdId = await ref.read(householdRepositoryProvider).redeemInvite(
+            code: result.code,
+            displayName: result.displayName,
+          );
+      await ref.read(activeHouseholdIdProvider.notifier).setActive(householdId);
+      ref.invalidate(householdsProvider);
+      ref.invalidate(currentHouseholdProvider);
+      Haptics.success();
+    } catch (_) {
+      Haptics.warning();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Código inválido ou expirado.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _leaveHousehold(String memberId, String householdName) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Sair do household?'),
+        title: Text('Sair de "$householdName"?'),
         content: const Text(
           'Você perde acesso aos lançamentos, metas e recorrências '
-          'compartilhados. Essa ação não pode ser desfeita.',
+          'compartilhados deste espaço. Essa ação não pode ser desfeita.',
         ),
         actions: [
           TextButton(
@@ -289,6 +347,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     setState(() => _isLeaving = true);
     try {
       await ref.read(householdRepositoryProvider).leaveHousehold(memberId);
+      ref.invalidate(householdsProvider);
       ref.invalidate(currentHouseholdProvider);
       Haptics.success();
       if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
@@ -529,6 +588,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final palette = AppColors.of(context);
     final currentMemberAsync = ref.watch(currentMemberProvider);
+    final currentHouseholdAsync = ref.watch(currentHouseholdProvider);
     final membersAsync = ref.watch(householdMembersProvider);
     final categoriesAsync = ref.watch(categoriesProvider);
     final accountsAsync = ref.watch(accountsProvider);
@@ -618,6 +678,60 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       );
                     }).toList(),
                   ),
+                );
+              },
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Text('Espaços', style: AppTypography.captionEmphasis),
+            const SizedBox(height: AppSpacing.xs),
+            Consumer(
+              builder: (context, ref, _) {
+                final householdsAsync = ref.watch(householdsProvider);
+                final activeId = ref.watch(currentHouseholdProvider).valueOrNull?.id;
+                return householdsAsync.when(
+                  loading: () => const Padding(
+                    padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+                    child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                  ),
+                  error: (_, __) =>
+                      Text('Não foi possível carregar.', style: AppTypography.caption),
+                  data: (households) {
+                    return Card(
+                      child: Column(
+                        children: [
+                          ...households.map((household) {
+                            final isActive = household.id == activeId;
+                            return ListTile(
+                              leading: Icon(
+                                isActive
+                                    ? Icons.radio_button_checked_rounded
+                                    : Icons.radio_button_unchecked_rounded,
+                                color: isActive ? palette.accent : null,
+                              ),
+                              title: Text(household.name),
+                              subtitle: isActive
+                                  ? Text('Ativo agora', style: AppTypography.caption)
+                                  : null,
+                              onTap: isActive
+                                  ? null
+                                  : () => unawaited(_switchHousehold(household.id)),
+                            );
+                          }),
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: const Icon(Icons.add_rounded, size: 20),
+                            title: const Text('Criar novo espaço'),
+                            onTap: () => unawaited(_createNewHousehold()),
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.key_outlined, size: 20),
+                            title: const Text('Entrar com código'),
+                            onTap: () => unawaited(_joinHouseholdWithCode()),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 );
               },
             ),
@@ -818,7 +932,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             OutlinedButton(
               onPressed: _isLeaving || currentMemberAsync.valueOrNull == null
                   ? null
-                  : () => _leaveHousehold(currentMemberAsync.value!.id),
+                  : () => _leaveHousehold(
+                        currentMemberAsync.value!.id,
+                        currentHouseholdAsync.valueOrNull?.name ?? 'este espaço',
+                      ),
               style: OutlinedButton.styleFrom(
                 foregroundColor: palette.warning,
                 side: BorderSide(color: palette.warning),
@@ -829,7 +946,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Sair do household'),
+                  : const Text('Sair deste espaço'),
             ),
             const SizedBox(height: AppSpacing.sm),
             OutlinedButton(
@@ -849,6 +966,150 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _CreateHouseholdDialog extends StatefulWidget {
+  const _CreateHouseholdDialog();
+
+  @override
+  State<_CreateHouseholdDialog> createState() => _CreateHouseholdDialogState();
+}
+
+class _CreateHouseholdDialogState extends State<_CreateHouseholdDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _householdNameController = TextEditingController();
+  final _displayNameController = TextEditingController();
+
+  @override
+  void dispose() {
+    _householdNameController.dispose();
+    _displayNameController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.of(context).pop((
+      householdName: _householdNameController.text.trim(),
+      displayName: _displayNameController.text.trim(),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Criar novo espaço'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Um espaço completamente separado — nada aqui se mistura com '
+              'os seus outros espaços.',
+              style: AppTypography.caption,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            TextFormField(
+              controller: _householdNameController,
+              textCapitalization: TextCapitalization.words,
+              autofocus: true,
+              decoration: const InputDecoration(hintText: 'Nome do espaço (ex.: "Empresa")'),
+              validator: (value) =>
+                  (value == null || value.trim().isEmpty) ? 'Informe um nome' : null,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            TextFormField(
+              controller: _displayNameController,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(hintText: 'Como te chamamos aqui?'),
+              validator: (value) =>
+                  (value == null || value.trim().isEmpty) ? 'Informe seu nome' : null,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: const Text('Criar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _JoinHouseholdDialog extends StatefulWidget {
+  const _JoinHouseholdDialog();
+
+  @override
+  State<_JoinHouseholdDialog> createState() => _JoinHouseholdDialogState();
+}
+
+class _JoinHouseholdDialogState extends State<_JoinHouseholdDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _codeController = TextEditingController();
+  final _displayNameController = TextEditingController();
+
+  @override
+  void dispose() {
+    _codeController.dispose();
+    _displayNameController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.of(context).pop((
+      code: _codeController.text.trim().toUpperCase(),
+      displayName: _displayNameController.text.trim(),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Entrar com código'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _codeController,
+              textCapitalization: TextCapitalization.characters,
+              autofocus: true,
+              decoration: const InputDecoration(hintText: 'Código de convite'),
+              validator: (value) =>
+                  (value == null || value.trim().isEmpty) ? 'Informe o código' : null,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            TextFormField(
+              controller: _displayNameController,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(hintText: 'Como te chamamos aqui?'),
+              validator: (value) =>
+                  (value == null || value.trim().isEmpty) ? 'Informe seu nome' : null,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: const Text('Entrar'),
+        ),
+      ],
     );
   }
 }
