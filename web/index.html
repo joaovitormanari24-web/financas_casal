@@ -214,6 +214,81 @@
       };
     })();
   </script>
+  <script>
+    // Ponte pra Face ID/Touch ID/Windows Hello via WebAuthn — usada só como
+    // destravamento local do bloqueio por PIN (não troca o login da conta).
+    // Sem verificação de assinatura no servidor: o único valor de segurança
+    // aqui é o próprio navegador ter exigido a biometria pra devolver
+    // qualquer resultado, o mesmo nível de confiança que o PIN local já
+    // tinha (ver app_lock_provider.dart).
+    (function() {
+      function toBase64(bytes) {
+        var binary = '';
+        var arr = new Uint8Array(bytes);
+        for (var i = 0; i < arr.length; i++) binary += String.fromCharCode(arr[i]);
+        return btoa(binary);
+      }
+      function fromBase64(base64) {
+        var binary = atob(base64);
+        var bytes = new Uint8Array(binary.length);
+        for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes;
+      }
+
+      window.FinancasBiometric = {
+        isSupported: async function() {
+          if (!window.PublicKeyCredential ||
+              !PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
+            return false;
+          }
+          try {
+            return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+          } catch (e) {
+            return false;
+          }
+        },
+        register: async function() {
+          var credential = await navigator.credentials.create({
+            publicKey: {
+              challenge: crypto.getRandomValues(new Uint8Array(32)),
+              rp: { name: 'Finanças inteligentes' },
+              user: {
+                id: crypto.getRandomValues(new Uint8Array(16)),
+                name: 'app-lock',
+                displayName: 'Desbloqueio do app',
+              },
+              pubKeyCredParams: [
+                { alg: -7, type: 'public-key' },
+                { alg: -257, type: 'public-key' },
+              ],
+              authenticatorSelection: {
+                authenticatorAttachment: 'platform',
+                userVerification: 'required',
+              },
+              timeout: 60000,
+            },
+          });
+          if (!credential) throw new Error('no_credential');
+          return toBase64(credential.rawId);
+        },
+        authenticate: async function(credentialIdBase64) {
+          var assertion = await navigator.credentials.get({
+            publicKey: {
+              challenge: crypto.getRandomValues(new Uint8Array(32)),
+              allowCredentials: [{
+                id: fromBase64(credentialIdBase64),
+                type: 'public-key',
+                transports: ['internal'],
+              }],
+              userVerification: 'required',
+              timeout: 60000,
+            },
+          });
+          return !!assertion;
+        },
+      };
+    })();
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

@@ -8,6 +8,7 @@ import '../../../core/providers/app_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../shared/services/biometric_unlock_service.dart';
 import '../../../shared/utils/haptics.dart';
 
 /// Tela de bloqueio local — mostrada por cima de tudo (ver [main.dart])
@@ -21,8 +22,32 @@ class AppLockScreen extends ConsumerStatefulWidget {
 }
 
 class _AppLockScreenState extends ConsumerState<AppLockScreen> {
+  final _biometricService = const BiometricUnlockService();
   String _entered = '';
   bool _isWrong = false;
+  bool _isAuthenticatingBiometric = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Sempre tenta a biometria primeiro, sem esperar toque — se o usuário
+    // cancelar ou falhar, sobra o PIN normal, já visível por baixo.
+    final credentialId = ref.read(biometricLockProvider).valueOrNull;
+    if (credentialId != null) {
+      unawaited(_tryBiometric(credentialId));
+    }
+  }
+
+  Future<void> _tryBiometric(String credentialId) async {
+    setState(() => _isAuthenticatingBiometric = true);
+    final ok = await _biometricService.authenticate(credentialId);
+    if (!mounted) return;
+    setState(() => _isAuthenticatingBiometric = false);
+    if (ok) {
+      Haptics.success();
+      ref.read(appUnlockedProvider.notifier).state = true;
+    }
+  }
 
   Future<void> _onDigit(String digit) async {
     if (_entered.length >= 4) return;
@@ -81,6 +106,7 @@ class _AppLockScreenState extends ConsumerState<AppLockScreen> {
   @override
   Widget build(BuildContext context) {
     final palette = AppColors.of(context);
+    final biometricCredentialId = ref.watch(biometricLockProvider).valueOrNull;
 
     return Scaffold(
       body: SafeArea(
@@ -92,6 +118,22 @@ class _AppLockScreenState extends ConsumerState<AppLockScreen> {
               Icon(Icons.lock_outline_rounded, size: 40, color: palette.textSecondary),
               const SizedBox(height: AppSpacing.md),
               Text('Digite seu PIN', style: AppTypography.title),
+              if (biometricCredentialId != null) ...[
+                const SizedBox(height: AppSpacing.md),
+                TextButton.icon(
+                  onPressed: _isAuthenticatingBiometric
+                      ? null
+                      : () => unawaited(_tryBiometric(biometricCredentialId)),
+                  icon: _isAuthenticatingBiometric
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.face_retouching_natural_rounded, size: 18),
+                  label: Text(_isAuthenticatingBiometric ? 'Verificando…' : 'Usar Face ID / Touch ID'),
+                ),
+              ],
               const SizedBox(height: AppSpacing.lg),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,

@@ -15,6 +15,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../models/accounts.dart';
 import '../../../models/category.dart';
+import '../../../shared/services/biometric_unlock_service.dart';
 import '../../../shared/services/push_notification_service.dart';
 import '../../../shared/utils/category_icons.dart';
 import '../../../shared/utils/currency_formatter.dart';
@@ -41,10 +42,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _pushEnabled = false;
   bool _isTogglingPush = false;
 
+  final _biometricService = const BiometricUnlockService();
+  bool _biometricSupported = false;
+  bool _isTogglingBiometric = false;
+
   @override
   void initState() {
     super.initState();
     unawaited(_checkPushStatus());
+    unawaited(_checkBiometricSupport());
+  }
+
+  Future<void> _checkBiometricSupport() async {
+    final supported = await _biometricService.isSupported();
+    if (mounted) setState(() => _biometricSupported = supported);
   }
 
   Future<void> _checkPushStatus() async {
@@ -226,6 +237,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final pin = await _promptForCurrentPin();
     if (pin == null) return;
     await ref.read(appLockProvider.notifier).clearPin();
+    // Face ID é sempre um complemento ao PIN — sem PIN não tem pra onde cair
+    // se a biometria falhar, então desativa junto.
+    await ref.read(biometricLockProvider.notifier).clear();
+    Haptics.success();
+  }
+
+  Future<void> _enableBiometricLock() async {
+    setState(() => _isTogglingBiometric = true);
+    try {
+      final credentialId = await _biometricService.register();
+      await ref.read(biometricLockProvider.notifier).setCredentialId(credentialId);
+      Haptics.success();
+    } catch (_) {
+      Haptics.warning();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível ativar o Face ID/Touch ID.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isTogglingBiometric = false);
+    }
+  }
+
+  Future<void> _disableBiometricLock() async {
+    await ref.read(biometricLockProvider.notifier).clear();
     Haptics.success();
   }
 
@@ -795,6 +832,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 );
               },
             ),
+            if (_biometricSupported)
+              Consumer(
+                builder: (context, ref, _) {
+                  final hasPin = ref.watch(appLockProvider).valueOrNull != null;
+                  final hasBiometric = ref.watch(biometricLockProvider).valueOrNull != null;
+                  return Card(
+                    child: SwitchListTile(
+                      title: const Text('Desbloquear com Face ID / Touch ID'),
+                      subtitle: Text(
+                        !hasPin
+                            ? 'Ative o PIN acima primeiro — o Face ID é um atalho, o PIN '
+                                'continua funcionando se a biometria falhar.'
+                            : hasBiometric
+                                ? 'Ativado — tenta a biometria antes de pedir o PIN.'
+                                : 'Usa a biometria do aparelho como atalho pro PIN.',
+                        style: AppTypography.caption,
+                      ),
+                      value: hasBiometric,
+                      onChanged: (!hasPin || _isTogglingBiometric)
+                          ? null
+                          : (value) => unawaited(
+                                value ? _enableBiometricLock() : _disableBiometricLock(),
+                              ),
+                    ),
+                  );
+                },
+              ),
             const SizedBox(height: AppSpacing.lg),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
