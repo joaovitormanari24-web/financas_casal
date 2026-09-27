@@ -15,7 +15,6 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../models/accounts.dart';
 import '../../../models/category.dart';
-import '../../../models/enums.dart';
 import '../../../shared/services/push_notification_service.dart';
 import '../../../shared/utils/category_icons.dart';
 import '../../../shared/utils/currency_formatter.dart';
@@ -260,57 +259,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       Haptics.warning();
     } finally {
       if (mounted) setState(() => _isSavingName = false);
-    }
-  }
-
-  Future<void> _setRecurringActive(String id, bool active) async {
-    try {
-      await ref.read(recurringTransactionRepositoryProvider).setActive(id, active);
-      ref.invalidate(recurringTransactionsProvider);
-      Haptics.success();
-    } catch (_) {
-      Haptics.warning();
-    }
-  }
-
-  Future<void> _deleteRecurring(String id) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Excluir recorrência?'),
-        content: const Text(
-          'Os lançamentos já gerados por ela continuam no histórico — só a '
-          'geração de novos, mês a mês, é interrompida. Essa ação não pode '
-          'ser desfeita.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(
-              'Excluir',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-
-    try {
-      await ref.read(recurringTransactionRepositoryProvider).delete(id);
-      ref.invalidate(recurringTransactionsProvider);
-      Haptics.success();
-    } catch (_) {
-      Haptics.warning();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Não foi possível excluir.')),
-        );
-      }
     }
   }
 
@@ -978,69 +926,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       );
                     }).toList(),
                   ),
-                );
-              },
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Text('Lançamentos recorrentes', style: AppTypography.captionEmphasis),
-            const SizedBox(height: AppSpacing.xs),
-            Consumer(
-              builder: (context, ref, _) {
-                final recurringAsync = ref.watch(recurringTransactionsProvider);
-                return recurringAsync.when(
-                  loading: () => const Padding(
-                    padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
-                    child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                  ),
-                  error: (_, __) =>
-                      Text('Não foi possível carregar.', style: AppTypography.caption),
-                  data: (recurrences) {
-                    if (recurrences.isEmpty) {
-                      return Text(
-                        'Nenhum lançamento recorrente cadastrado ainda.',
-                        style: AppTypography.caption.copyWith(color: palette.textTertiary),
-                      );
-                    }
-                    return Card(
-                      child: Column(
-                        children: recurrences.map((recurring) {
-                          return ListTile(
-                            leading: Icon(
-                              Icons.repeat_rounded,
-                              color: recurring.active ? null : palette.textTertiary,
-                            ),
-                            title: Text(
-                              recurring.description,
-                              style: recurring.active
-                                  ? null
-                                  : TextStyle(color: palette.textTertiary),
-                            ),
-                            subtitle: Text(
-                              '${CurrencyFormatter.format(recurring.amount)} · '
-                              '${recurring.frequency.label}'
-                              '${recurring.active ? '' : ' · pausado'}',
-                              style: AppTypography.caption,
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Switch(
-                                  value: recurring.active,
-                                  onChanged: (value) => unawaited(
-                                    _setRecurringActive(recurring.id, value),
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline_rounded, size: 20),
-                                  onPressed: () => unawaited(_deleteRecurring(recurring.id)),
-                                ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    );
-                  },
                 );
               },
             ),
