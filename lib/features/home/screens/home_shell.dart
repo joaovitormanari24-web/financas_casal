@@ -26,6 +26,7 @@ import '../../../shared/utils/haptics.dart';
 import '../../../shared/utils/report_export.dart';
 import '../../../shared/widgets/animated_currency_text.dart';
 import '../../../shared/widgets/fade_slide_in.dart';
+import '../../../shared/widgets/shimmer_box.dart';
 import '../../../shared/widgets/tap_bounce.dart';
 
 class HomeShell extends ConsumerWidget {
@@ -423,46 +424,71 @@ class _MonthSummaryCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Garante que o resumo reflete o estado mais recente das transações.
-    ref.watch(transactionsProvider);
+    final transactionsAsync = ref.watch(transactionsProvider);
     final summary = ref.watch(monthSummaryProvider);
+    final selectedMonth = ref.watch(selectedMonthProvider);
+    final customRange = ref.watch(customDateRangeProvider);
     final palette = AppColors.of(context);
 
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          children: [
-            Text('Saldo do mês', style: AppTypography.caption),
-            const SizedBox(height: AppSpacing.xxs),
-            AnimatedCurrencyText(
-              value: summary.balance,
-              style: AppTypography.displayAmount,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Row(
-              children: [
-                Expanded(
-                  child: _SummaryStat(
-                    label: 'Receitas',
-                    value: summary.income,
-                    color: palette.income,
-                    icon: Icons.arrow_upward_rounded,
+        child: transactionsAsync.isLoading
+            ? const Column(
+                children: [
+                  ShimmerBox(width: 160, height: 12, borderRadius: 4),
+                  SizedBox(height: AppSpacing.xs),
+                  ShimmerBox(width: 180, height: 34, borderRadius: 6),
+                  SizedBox(height: AppSpacing.md),
+                  ShimmerBox(width: double.infinity, height: 32, borderRadius: 6),
+                ],
+              )
+            : AnimatedSwitcher(
+                duration: AppMotion.resolve(AppMotion.fast),
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0.05, 0),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
                   ),
                 ),
-                Container(width: 1, height: 32, color: palette.borderSubtle),
-                Expanded(
-                  child: _SummaryStat(
-                    label: 'Despesas',
-                    value: summary.expense,
-                    color: palette.expense,
-                    icon: Icons.arrow_downward_rounded,
-                  ),
+                child: Column(
+                  key: ValueKey(customRange ?? selectedMonth),
+                  children: [
+                    Text('Saldo do mês', style: AppTypography.caption),
+                    const SizedBox(height: AppSpacing.xxs),
+                    AnimatedCurrencyText(
+                      value: summary.balance,
+                      style: AppTypography.displayAmount,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _SummaryStat(
+                            label: 'Receitas',
+                            value: summary.income,
+                            color: palette.income,
+                            icon: Icons.arrow_upward_rounded,
+                          ),
+                        ),
+                        Container(width: 1, height: 32, color: palette.borderSubtle),
+                        Expanded(
+                          child: _SummaryStat(
+                            label: 'Despesas',
+                            value: summary.expense,
+                            color: palette.expense,
+                            icon: Icons.arrow_downward_rounded,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
       ),
     );
   }
@@ -775,9 +801,8 @@ class _TransactionsList extends ConsumerWidget {
     final currentMemberAsync = ref.watch(currentMemberProvider);
 
     return transactionsAsync.when(
-      loading: () => const Padding(
-        padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
-        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      loading: () => Column(
+        children: List.generate(4, (_) => const _TransactionTileSkeleton()),
       ),
       error: (_, __) => Padding(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
@@ -824,7 +849,8 @@ class _TransactionsList extends ConsumerWidget {
         final currentMemberId = currentMemberAsync.valueOrNull?.id;
 
         return Column(
-          children: transactions.map((transaction) {
+          children: transactions.indexed.map((entry) {
+            final (index, transaction) = entry;
             final category = categoriesById[transaction.categoryId];
             final payer = membersById[transaction.paidByMemberId];
             final paidByLabel = members.length > 1
@@ -832,16 +858,48 @@ class _TransactionsList extends ConsumerWidget {
                     ? null
                     : (payer.id == currentMemberId ? 'Você' : payer.displayName))
                 : null;
-            return _TransactionTile(
-              transaction: transaction,
-              categoryName: category?.name,
-              categoryIcon: category?.icon,
-              categoryColor: category?.colorHex,
-              paidByLabel: paidByLabel,
+            return FadeSlideIn(
+              delay: Duration(milliseconds: (index * 30).clamp(0, 240)),
+              child: _TransactionTile(
+                transaction: transaction,
+                categoryName: category?.name,
+                categoryIcon: category?.icon,
+                categoryColor: category?.colorHex,
+                paidByLabel: paidByLabel,
+              ),
             );
           }).toList(),
         );
       },
+    );
+  }
+}
+
+class _TransactionTileSkeleton extends StatelessWidget {
+  const _TransactionTileSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      child: Row(
+        children: [
+          ShimmerBox(width: 40, height: 40, borderRadius: 20),
+          SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ShimmerBox(width: 140, height: 14, borderRadius: 4),
+                SizedBox(height: 6),
+                ShimmerBox(width: 90, height: 11, borderRadius: 4),
+              ],
+            ),
+          ),
+          SizedBox(width: AppSpacing.sm),
+          ShimmerBox(width: 60, height: 14, borderRadius: 4),
+        ],
+      ),
     );
   }
 }
@@ -972,7 +1030,11 @@ class _TransactionTile extends ConsumerWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [color.withValues(alpha: 0.22), color.withValues(alpha: 0.1)],
+              ),
               shape: BoxShape.circle,
             ),
             child: Icon(
