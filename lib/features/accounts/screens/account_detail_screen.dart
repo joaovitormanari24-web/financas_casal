@@ -8,6 +8,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../models/accounts.dart';
 import '../../../models/enums.dart';
+import '../../../core/theme/app_page_route.dart';
 import '../../../models/transaction.dart';
 import '../../../shared/utils/currency_formatter.dart';
 import '../../transactions/screens/add_transaction_screen.dart';
@@ -128,7 +129,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                         ),
                         onTap: () async {
                           await Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => AddTransactionScreen(existing: t)),
+                            appPageRoute(builder: (_) => AddTransactionScreen(existing: t)),
                           );
                           if (mounted) await _refresh();
                         },

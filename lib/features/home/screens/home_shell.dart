@@ -8,6 +8,8 @@ import 'package:intl/intl.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/finance_providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_motion.dart';
+import '../../../core/theme/app_page_route.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../features/transactions/screens/add_transaction_screen.dart';
@@ -22,6 +24,9 @@ import '../../../shared/utils/category_icons.dart';
 import '../../../shared/utils/currency_formatter.dart';
 import '../../../shared/utils/haptics.dart';
 import '../../../shared/utils/report_export.dart';
+import '../../../shared/widgets/animated_currency_text.dart';
+import '../../../shared/widgets/fade_slide_in.dart';
+import '../../../shared/widgets/tap_bounce.dart';
 
 class HomeShell extends ConsumerWidget {
   const HomeShell({super.key});
@@ -80,7 +85,7 @@ class HomeShell extends ConsumerWidget {
         title: GestureDetector(
           onTap: () => unawaited(
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              appPageRoute(builder: (_) => const SettingsScreen()),
             ),
           ),
           child: Row(
@@ -133,19 +138,22 @@ class HomeShell extends ConsumerWidget {
             children: [
               const _MonthSelector(),
               const SizedBox(height: AppSpacing.md),
-              const _MonthSummaryCard(),
+              const FadeSlideIn(child: _MonthSummaryCard()),
               const SizedBox(height: AppSpacing.sm),
               OutlinedButton.icon(
                 onPressed: () => unawaited(
                   Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const SimulatorScreen()),
+                    appPageRoute(builder: (_) => const SimulatorScreen()),
                   ),
                 ),
                 icon: const Icon(Icons.calculate_outlined, size: 18),
                 label: const Text('Podemos gastar?'),
               ),
               const SizedBox(height: AppSpacing.lg),
-              const _SpendingByCategoryChart(),
+              const FadeSlideIn(
+                delay: Duration(milliseconds: 80),
+                child: _SpendingByCategoryChart(),
+              ),
               const SizedBox(height: AppSpacing.lg),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -166,7 +174,7 @@ class HomeShell extends ConsumerWidget {
       floatingActionButton: FloatingActionButton(
         onPressed: () => unawaited(
           Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const AddTransactionScreen()),
+            appPageRoute(builder: (_) => const AddTransactionScreen()),
           ),
         ),
         backgroundColor: palette.textPrimary,
@@ -193,7 +201,7 @@ class _NotificationsButton extends ConsumerWidget {
       ),
       onPressed: () => unawaited(
         Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+          appPageRoute(builder: (_) => const NotificationsScreen()),
         ),
       ),
     );
@@ -427,8 +435,8 @@ class _MonthSummaryCard extends ConsumerWidget {
           children: [
             Text('Saldo do mês', style: AppTypography.caption),
             const SizedBox(height: AppSpacing.xxs),
-            Text(
-              CurrencyFormatter.format(summary.balance),
+            AnimatedCurrencyText(
+              value: summary.balance,
               style: AppTypography.displayAmount,
             ),
             const SizedBox(height: AppSpacing.md),
@@ -486,7 +494,7 @@ class _SummaryStat extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 2),
-        Text(CurrencyFormatter.format(value), style: AppTypography.amountMedium),
+        AnimatedCurrencyText(value: value, style: AppTypography.amountMedium),
       ],
     );
   }
@@ -545,6 +553,8 @@ class _SpendingByCategoryChart extends ConsumerWidget {
                       centerSpaceRadius: 36,
                       sectionsSpace: 2,
                     ),
+                    swapAnimationDuration: AppMotion.resolve(AppMotion.slow),
+                    swapAnimationCurve: AppMotion.enter,
                   ),
                 ),
                 const SizedBox(width: AppSpacing.md),
@@ -855,7 +865,7 @@ class _TransactionTile extends ConsumerWidget {
 
   Future<void> _openEdit(BuildContext context, WidgetRef ref) async {
     final deleted = await Navigator.of(context).push<models.Transaction>(
-      MaterialPageRoute(builder: (_) => AddTransactionScreen(existing: transaction)),
+      appPageRoute(builder: (_) => AddTransactionScreen(existing: transaction)),
     );
     if (deleted == null || !context.mounted) return;
 
@@ -1006,34 +1016,47 @@ class _TransactionTile extends ConsumerWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (transaction.isPending) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: (transaction.isOverdue ? palette.expense : palette.warning)
-                              .withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(AppRadius.sm),
-                        ),
-                        child: Text(
-                          transaction.isOverdue ? 'Atrasado' : 'Pendente',
-                          style: AppTypography.caption.copyWith(
-                            color: transaction.isOverdue ? palette.expense : palette.warning,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                    const SizedBox(width: 6),
+                    AnimatedSwitcher(
+                      duration: AppMotion.resolve(AppMotion.fast),
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(scale: animation, child: child),
                       ),
-                    ],
+                      child: transaction.isPending
+                          ? Container(
+                              key: ValueKey(transaction.isOverdue),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: (transaction.isOverdue ? palette.expense : palette.warning)
+                                    .withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(AppRadius.sm),
+                              ),
+                              child: Text(
+                                transaction.isOverdue ? 'Atrasado' : 'Pendente',
+                                style: AppTypography.caption.copyWith(
+                                  color: transaction.isOverdue ? palette.expense : palette.warning,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            )
+                          : const SizedBox.shrink(key: ValueKey('paid')),
+                    ),
                   ],
                 ),
               ],
             ),
           ),
           if (transaction.isPending)
-            IconButton(
-              tooltip: 'Marcar como pago',
-              icon: Icon(Icons.check_circle_outline_rounded, color: palette.textTertiary),
-              onPressed: () => unawaited(_markPaid(context, ref)),
+            Tooltip(
+              message: 'Marcar como pago',
+              child: TapBounce(
+                onTap: () => unawaited(_markPaid(context, ref)),
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Icon(Icons.check_circle_outline_rounded, color: palette.textTertiary),
+                ),
+              ),
             ),
           Text(
             '${isExpense ? '-' : '+'} ${CurrencyFormatter.format(transaction.amount)}',

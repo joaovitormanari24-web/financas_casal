@@ -8,6 +8,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../models/goal.dart';
 import '../../../shared/utils/category_icons.dart';
+import '../../../core/theme/app_page_route.dart';
 import '../../../shared/utils/currency_formatter.dart';
 import '../../../shared/utils/haptics.dart';
 import 'add_goal_screen.dart';
@@ -125,7 +126,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
           IconButton(
             icon: const Icon(Icons.edit_outlined),
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => AddGoalScreen(existing: goal)),
+              appPageRoute(builder: (_) => AddGoalScreen(existing: goal)),
             ),
           ),
           IconButton(

@@ -10,6 +10,7 @@ import '../../../core/providers/finance_providers.dart';
 import '../../../core/providers/household_selection_provider.dart';
 import '../../../core/providers/theme_provider.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_page_route.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../models/accounts.dart';
@@ -958,7 +959,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                         onTap: () => unawaited(
                           Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => AccountDetailScreen(account: account)),
+                            appPageRoute(builder: (_) => AccountDetailScreen(account: account)),
                           ),
                         ),
                         trailing: Row(

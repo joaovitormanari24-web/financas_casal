@@ -7,6 +7,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../models/goal.dart';
 import '../../../shared/utils/category_icons.dart';
+import '../../../core/theme/app_page_route.dart';
 import '../../../shared/utils/currency_formatter.dart';
 import 'add_goal_screen.dart';
 import 'goal_detail_screen.dart';
@@ -74,7 +75,7 @@ class GoalsScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const AddGoalScreen()),
+          appPageRoute(builder: (_) => const AddGoalScreen()),
         ),
         backgroundColor: palette.textPrimary,
         foregroundColor: palette.background,
@@ -97,7 +98,7 @@ class _GoalCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(AppRadius.lg),
         onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => GoalDetailScreen(goal: goal)),
+          appPageRoute(builder: (_) => GoalDetailScreen(goal: goal)),
         ),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.md),
