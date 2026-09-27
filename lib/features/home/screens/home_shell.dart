@@ -25,7 +25,9 @@ import '../../../shared/utils/currency_formatter.dart';
 import '../../../shared/utils/haptics.dart';
 import '../../../shared/utils/report_export.dart';
 import '../../../shared/widgets/animated_currency_text.dart';
+import '../../../shared/widgets/app_background.dart';
 import '../../../shared/widgets/fade_slide_in.dart';
+import '../../../shared/widgets/glass_card.dart';
 import '../../../shared/widgets/shimmer_box.dart';
 import '../../../shared/widgets/tap_bounce.dart';
 
@@ -77,6 +79,7 @@ class HomeShell extends ConsumerWidget {
     final palette = AppColors.of(context);
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         leadingWidth: 56,
         leading: Padding(
@@ -128,7 +131,8 @@ class HomeShell extends ConsumerWidget {
           ),
         ],
       ),
-      body: SafeArea(
+      body: AppBackground(
+        child: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(transactionsProvider);
@@ -170,6 +174,7 @@ class HomeShell extends ConsumerWidget {
               const SizedBox(height: AppSpacing.xxxl),
             ],
           ),
+        ),
         ),
       ),
       floatingActionButton: FloatingActionButton(
@@ -430,10 +435,8 @@ class _MonthSummaryCard extends ConsumerWidget {
     final customRange = ref.watch(customDateRangeProvider);
     final palette = AppColors.of(context);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: transactionsAsync.isLoading
+    return GlassCard(
+      child: transactionsAsync.isLoading
             ? const Column(
                 children: [
                   ShimmerBox(width: 160, height: 12, borderRadius: 4),
@@ -489,7 +492,6 @@ class _MonthSummaryCard extends ConsumerWidget {
                   ],
                 ),
               ),
-      ),
     );
   }
 }
@@ -548,10 +550,8 @@ class _SpendingByCategoryChart extends ConsumerWidget {
     final entries = spentByCategory.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
+    return GlassCard(
+      child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Gastos por categoria', style: AppTypography.subtitle),
@@ -621,7 +621,6 @@ class _SpendingByCategoryChart extends ConsumerWidget {
             ),
           ],
         ),
-      ),
     );
   }
 }
@@ -875,6 +874,46 @@ class _TransactionsList extends ConsumerWidget {
   }
 }
 
+class _SwipeActionBackground extends StatelessWidget {
+  const _SwipeActionBackground({
+    required this.alignment,
+    required this.color,
+    required this.icon,
+    required this.label,
+  });
+
+  final Alignment alignment;
+  final Color color;
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      alignment: alignment,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: alignment == Alignment.centerLeft
+            ? [
+                Icon(icon, color: color),
+                const SizedBox(width: AppSpacing.xs),
+                Text(label, style: AppTypography.captionEmphasis.copyWith(color: color)),
+              ]
+            : [
+                Text(label, style: AppTypography.captionEmphasis.copyWith(color: color)),
+                const SizedBox(width: AppSpacing.xs),
+                Icon(icon, color: color),
+              ],
+      ),
+    );
+  }
+}
+
 class _TransactionTileSkeleton extends StatelessWidget {
   const _TransactionTileSkeleton();
 
@@ -1013,13 +1052,68 @@ class _TransactionTile extends ConsumerWidget {
     }
   }
 
+  Future<void> _deleteViaSwipe(BuildContext context, WidgetRef ref) async {
+    try {
+      await ref.read(transactionRepositoryProvider).delete(transaction.id);
+      ref.invalidate(transactionsProvider);
+      Haptics.success();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('"${transaction.description}" excluído.'),
+            action: SnackBarAction(
+              label: 'Desfazer',
+              onPressed: () => unawaited(_undoDelete(context, ref, transaction)),
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      Haptics.warning();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível excluir.')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = AppColors.of(context);
     final isExpense = transaction.type == TransactionType.expense;
     final color = categoryColor != null ? colorFromHex(categoryColor!) : palette.accent;
 
-    return InkWell(
+    return Dismissible(
+      key: ValueKey(transaction.id),
+      direction:
+          transaction.isPending ? DismissDirection.horizontal : DismissDirection.endToStart,
+      background: _SwipeActionBackground(
+        alignment: Alignment.centerLeft,
+        color: palette.income,
+        icon: Icons.check_circle_rounded,
+        label: 'Pago',
+      ),
+      secondaryBackground: _SwipeActionBackground(
+        alignment: Alignment.centerRight,
+        color: palette.expense,
+        icon: Icons.delete_rounded,
+        label: 'Excluir',
+      ),
+      confirmDismiss: (direction) async {
+        // Nunca deixa o Dismissible remover o widget sozinho (retorna
+        // false sempre) — tanto marcar como pago quanto excluir disparam
+        // a ação e deixam o rebuild natural da lista (via invalidate do
+        // provider) tirar o item de tela, evitando o erro clássico de um
+        // Dismissible "removido" ainda aparecer na árvore no frame seguinte.
+        if (direction == DismissDirection.startToEnd) {
+          await _markPaid(context, ref);
+        } else {
+          await _deleteViaSwipe(context, ref);
+        }
+        return false;
+      },
+      child: InkWell(
       borderRadius: BorderRadius.circular(AppRadius.md),
       onTap: () => unawaited(_openEdit(context, ref)),
       child: Padding(
@@ -1129,6 +1223,7 @@ class _TransactionTile extends ConsumerWidget {
         ],
       ),
       ),
+    ),
     );
   }
 }
